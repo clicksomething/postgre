@@ -1,22 +1,18 @@
-require('dotenv').config();
+// index.js
 const express = require('express');
-const createTables = require('./database/initDB');
-
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Import the user routes
+const userRoutes = require('./src/routes/userRoutes');
+
+// Use middleware to handle JSON requests
 app.use(express.json());
 
-// Default route
-app.get('/', (req, res) => {
-    res.send('Test Scheduling API is running...');
-});
+// Use the user routes
+app.use('/api/users', userRoutes);  // All user-related routes
 
-// Run database setup
-createTables();
+const PORT = process.env.PORT || 3000;
 
-// Start the server
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
