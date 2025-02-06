@@ -25,7 +25,7 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS Course (
         CourseID SERIAL PRIMARY KEY,
         CourseName VARCHAR(255) NOT NULL,
-        SeatingCapacity INT NOT NULL
+        Departement VARCHAR(255)
       );
 
       CREATE TABLE IF NOT EXISTS Room (
