@@ -4,7 +4,7 @@ const app = express();
 const bodyParser = require('body-parser');
 const userRoutes = require('../backend/src/routes/userRoutes.js'); // Importing user routes
 const { client } = require('../backend/database/db.js'); // Import the already established DB connection
-
+const initDB = require('./database/initDB');
 
 // Middleware to parse incoming JSON data
 app.use(bodyParser.json());
