@@ -1,4 +1,5 @@
-const client = require('../../database/db'); // Database connection
+const { client } = require('../../database/db'); // Database connection
+
 const multer = require('multer'); // For file uploads
 const xlsx = require('xlsx'); // For parsing Excel files
 const storage = multer.memoryStorage(); // Store file in memory
@@ -123,8 +124,3 @@ module.exports = {
     deleteExam,
     uploadExamSchedule,
   };
-
-
-
-
-
