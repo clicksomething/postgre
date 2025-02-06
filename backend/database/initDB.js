@@ -90,11 +90,9 @@ async function initDB() {
     await client.query('BEGIN');  // Start the transaction
 
     console.log("Starting to create tables...");
-
-    // Execute the queries
-    await client.query(query);
-    console.log("Enum type and tables created successfully!");
-
+ // Execute the queries
+ await client.query(query);
+ console.log("Enum type and tables created successfully!");
     // If we reach here, commit the transaction
     await client.query('COMMIT');
     console.log("Database setup completed successfully!");
