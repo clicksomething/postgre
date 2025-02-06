@@ -1,28 +1,19 @@
-// src/routes/userRoutes.js
 const express = require('express');
 const router = express.Router();
-const {
-  createUser,
-  getUserProfile,
-  updateUser,
-  deleteUser,
-  getUserById,
-  getUsers,
-} = require('../controllers/userController.js'); // Import the controller
+const userObserverController = require('../controllers/userObserverController');
 
-// POST request to create a new user
-router.post('/', createUser);
+// User Routes
+router.post('/users/create', userObserverController.createUser); // Updated to match the user's request
+router.get('/users', userObserverController.getUsers);             // Get all users
+router.get('/users/:id', userObserverController.getUserById);      // Get a user by ID
+router.put('/users/:id', userObserverController.updateUser);      // Update a user
+router.delete('/users/:id', userObserverController.deleteUser);   // Delete a user
 
-// GET request to get all users
-router.get('/',getUsers );
-
-// GET request to get a user by ID
-router.get('/:id',getUserById );
-
-// PUT request to update a user by ID
-router.put('/:id', updateUser);
-
-// DELETE request to delete a user by ID
-router.delete('/:id', deleteUser);
+// Observer Routes
+router.post('/observers', userObserverController.createObserver); // Create a new observer
+router.get('/observers', userObserverController.getObservers);    // Get all observers
+router.get('/observers/:id', userObserverController.getObserverById); // Get an observer by ID
+router.put('/observers/:id', userObserverController.updateObserver); // Update an observer
+router.delete('/observers/:id', userObserverController.deleteObserver); // Delete an observer
 
 module.exports = router;
