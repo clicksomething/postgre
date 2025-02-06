@@ -1,0 +1,267 @@
+{
+  "info": {
+    "name": "API Test Collection",
+    "description": "Final collection of tests for User, Observer, and Exam APIs with dummy data",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Alice Smith\", \"email\": \"alice@example.com\", \"phoneNum\": \"1234567890\", \"password\": \"password123\", \"isAdmin\": false}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/users/create",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "users", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/users",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "users"]
+            }
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/users/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "users", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Alice Updated\", \"email\": \"alice_updated@example.com\", \"phoneNum\": \"1234567890\", \"password\": \"newpassword\", \"isAdmin\": true}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/users/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "users", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "http://localhost:3000/api/users/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "users", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Observer",
+      "item": [
+        {
+          "name": "Create Observer",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userID\": 1, \"timeSlotID\": 1, \"courseID\": 1, \"name\": \"Dr. Emily White\", \"scientificRank\": \"Professor\", \"fatherName\": \"John White\", \"availability\": \"full-time\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/observers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "observers"]
+            }
+          }
+        },
+        {
+          "name": "Get All Observers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/observers",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "observers"]
+            }
+          }
+        },
+        {
+          "name": "Get Observer by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/observers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "observers", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Observer",
+          "request": {
+            "method": "PUT",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userID\": 1, \"timeSlotID\": 1, \"courseID\": 1, \"name\": \"Dr. Emily Updated\", \"scientificRank\": \"Senior Professor\", \"fatherName\": \"John White\", \"availability\": \"full-time\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/observers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "observers", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Observer",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "http://localhost:3000/api/observers/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "observers", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Exam",
+      "item": [
+        {
+          "name": "Create Exam",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"CourseID\": 1, \"RoomID\": 1, \"ExamName\": \"Midterm Exam\", \"ExamType\": \"Written\", \"ExamDate\": \"2023-10-15\", \"Duration\": \"2 hours\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api"]
+            }
+          }
+        },
+        {
+          "name": "Get All Exams",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api"]
+            }
+          }
+        },
+        {
+          "name": "Get Exam by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Exam",
+          "request": {
+            "method": "PUT",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ExamName\": \"Updated Midterm Exam\"}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Exam",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "http://localhost:3000/api/1",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "1"]
+            }
+          }
+        },
+        {
+          "name": "Upload Exam Schedule",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "http://localhost:3000/api/upload",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "upload"]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "path/to/your/file"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

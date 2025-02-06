@@ -1,10 +1,16 @@
 const { client } = require('../../database/db.js');  // Assuming client is the same for both users and observers
+
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 // Create a new user
 const createUser = async (req, res) => {
   const { name, email, phoneNum, password, isAdmin } = req.body;
+
+  // Check if password is provided
+  if (!password) {
+    return res.status(400).json({ message: 'Password is required' });
+  }
 
   try {
     // Hash the password
@@ -19,7 +25,7 @@ const createUser = async (req, res) => {
 
     const userInfoId = userInfoResult.rows[0].id;
 
-    // Insert user and associate with UserInfo (AppUser)
+    // Insert user and associate with UserInfo (appuser)
     const userResult = await client.query(
       `INSERT INTO appuser (U_ID, IsAdmin) 
        VALUES ($1, $2) RETURNING UserID`,
@@ -45,7 +51,7 @@ const createObserver = async (req, res) => {
       [userID, timeSlotID, courseID, name, scientificRank, fatherName, availability]
     );
 
-    res.status(201).json({ observerID: result.rows[0].ObserverID });
+    res.status(201).json({ message: 'Observer created successfully', observerID: result.rows[0].ObserverID });
   } catch (err) {
     console.error('Error creating observer:', err);
     res.status(500).json({ message: 'Error creating observer' });
@@ -57,7 +63,7 @@ const getUsers = async (req, res) => {
   try {
     const result = await client.query(`
       SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.IsAdmin
-      FROM "AppUser" u
+      FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
     `);
     res.status(200).json(result.rows);
@@ -91,7 +97,7 @@ const getUserById = async (req, res) => {
   try {
     const result = await client.query(`
       SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.IsAdmin
-      FROM "AppUser" u
+      FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
       WHERE u.UserID = $1
     `, [id]);
@@ -141,7 +147,7 @@ const updateUser = async (req, res) => {
     const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
     const result = await client.query(`
-      UPDATE "AppUser" u
+      UPDATE "appuser" u
       SET IsAdmin = $1
       FROM UserInfo ui
       WHERE u.U_ID = ui.ID AND u.UserID = $2
@@ -155,7 +161,7 @@ const updateUser = async (req, res) => {
     const updateUserInfo = await client.query(`
       UPDATE UserInfo
       SET Name = $1, Email = $2, PhoneNum = $3, Password = $4
-      WHERE ID = (SELECT U_ID FROM "AppUser" WHERE UserID = $5)
+      WHERE ID = (SELECT U_ID FROM "appuser" WHERE UserID = $5)
     `, [name, email, phoneNum, hashedPassword, id]);
 
     res.status(200).json({ message: 'User updated successfully' });
@@ -170,6 +176,14 @@ const updateObserver = async (req, res) => {
   const { id } = req.params;
   const { userID, timeSlotID, courseID, name, scientificRank, fatherName, availability } = req.body;
 
+  // Log the request body for debugging
+  console.log('Request Body:', req.body);
+
+  // Validate that the name is provided
+  if (!name) {
+    return res.status(400).json({ message: 'Name is required' });
+  }
+
   try {
     const result = await client.query(`
       UPDATE Observer
@@ -182,7 +196,8 @@ const updateObserver = async (req, res) => {
       return res.status(404).json({ message: 'Observer not found' });
     }
 
-    res.status(200).json({ message: 'Observer updated successfully' });
+    res.status(200).json({ message: 'Observer updated successfully', observerID: result.rows[0].ObserverID });
+
   } catch (err) {
     console.error('Error updating observer:', err);
     res.status(500).json({ message: 'Error updating observer' });
@@ -195,7 +210,7 @@ const deleteUser = async (req, res) => {
 
   try {
     const result = await client.query(`
-      DELETE FROM "AppUser" WHERE UserID = $1 RETURNING UserID
+      DELETE FROM "appuser" WHERE UserID = $1 RETURNING UserID
     `, [id]);
 
     if (result.rowCount === 0) {
