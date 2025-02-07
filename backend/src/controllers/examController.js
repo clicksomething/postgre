@@ -5,6 +5,13 @@ const xlsx = require('xlsx'); // For parsing Excel files
 const storage = multer.memoryStorage(); // Store file in memory
 const upload = multer({ storage });
 
+// Function to convert Excel serial date to JavaScript Date
+function excelDateToJSDate(serial) {
+    const utcDays = Math.floor(serial) - 25569; // Excel's epoch starts on 1900-01-01
+    const utcValue = utcDays * 86400; // Convert days to seconds
+    return new Date(utcValue * 1000); // Convert seconds to milliseconds
+}
+
 const createExam = async (req, res) => {
     const { courseId, roomId, examName, examType, examDate, duration } = req.body;
 
@@ -145,10 +152,13 @@ const uploadExamSchedule = async (req, res) => {
         for (const row of sheetData) {
             const { CourseID, RoomID, ExamName, ExamType, ExamDate, Duration } = row;
 
+            // Convert Excel date to JS Date and format for PostgreSQL
+            const formattedExamDate = ExamDate ? excelDateToJSDate(ExamDate).toISOString().split('T')[0] : null;
+
             await client.query(
                 `INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, ExamDate, Duration) 
                  VALUES ($1, $2, $3, $4, $5, $6)`,
-                [CourseID, RoomID, ExamName, ExamType, ExamDate, Duration]
+                [CourseID, RoomID, ExamName, ExamType, formattedExamDate, Duration]
             );
         }
 
