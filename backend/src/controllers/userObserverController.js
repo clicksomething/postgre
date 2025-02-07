@@ -143,26 +143,56 @@ const updateUser = async (req, res) => {
   const { id } = req.params;
   const { name, email, phoneNum, password, isAdmin } = req.body;
 
-  try {
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+  // Start building the query
+  let query = `UPDATE "appuser" SET `;
+  const values = [];
+  let index = 1;
+  let fieldsProvided = false;
 
-    const result = await client.query(`
-      UPDATE "appuser" u
-      SET IsAdmin = $1
-      FROM UserInfo ui
-      WHERE u.U_ID = ui.ID AND u.UserID = $2
-      RETURNING u.UserID
-    `, [isAdmin, id]);
+  // Check which fields are provided and build the query
+  if (isAdmin !== undefined) {
+    query += `IsAdmin = $${index++}, `;
+    values.push(isAdmin);
+    fieldsProvided = true;
+  }
+  if (name) {
+    query += `Name = $${index++}, `;
+    values.push(name);
+    fieldsProvided = true;
+  }
+  if (email) {
+    query += `Email = $${index++}, `;
+    values.push(email);
+    fieldsProvided = true;
+  }
+  if (phoneNum) {
+    query += `PhoneNum = $${index++}, `;
+    values.push(phoneNum);
+    fieldsProvided = true;
+  }
+  if (password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    query += `Password = $${index++}, `;
+    values.push(hashedPassword);
+    fieldsProvided = true;
+  }
+
+  // If no fields were provided, return an error
+  if (!fieldsProvided) {
+    return res.status(400).json({ message: "No fields provided for update" });
+  }
+
+  // Remove the last comma and space
+  query = query.slice(0, -2);
+  query += ` WHERE UserID = $${index} RETURNING UserID`;
+  values.push(id);
+
+  try {
+    const result = await client.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    const updateUserInfo = await client.query(`
-      UPDATE UserInfo
-      SET Name = $1, Email = $2, PhoneNum = $3, Password = $4
-      WHERE ID = (SELECT U_ID FROM "appuser" WHERE UserID = $5)
-    `, [name, email, phoneNum, hashedPassword, id]);
 
     res.status(200).json({ message: 'User updated successfully' });
   } catch (err) {
@@ -176,28 +206,67 @@ const updateObserver = async (req, res) => {
   const { id } = req.params;
   const { userID, timeSlotID, courseID, name, scientificRank, fatherName, availability } = req.body;
 
-  // Log the request body for debugging
-  console.log('Request Body:', req.body);
+  // Start building the query
+  let query = `UPDATE Observer SET `;
+  const values = [];
+  let index = 1;
+  let fieldsProvided = false;
 
-  // Validate that the name is provided
-  if (!name) {
-    return res.status(400).json({ message: 'Name is required' });
+  // Check which fields are provided and build the query
+  if (userID) {
+    query += `U_ID = $${index++}, `;
+    values.push(userID);
+    fieldsProvided = true;
+  }
+  if (timeSlotID) {
+    query += `TimeSlotID = $${index++}, `;
+    values.push(timeSlotID);
+    fieldsProvided = true;
+  }
+  if (courseID) {
+    query += `CourseID = $${index++}, `;
+    values.push(courseID);
+    fieldsProvided = true;
+  }
+  if (name) {
+    query += `Name = $${index++}, `;
+    values.push(name);
+    fieldsProvided = true;
+  }
+  if (scientificRank) {
+    query += `ScientificRank = $${index++}, `;
+    values.push(scientificRank);
+    fieldsProvided = true;
+  }
+  if (fatherName) {
+    query += `FatherName = $${index++}, `;
+    values.push(fatherName);
+    fieldsProvided = true;
+  }
+  if (availability) {
+    query += `Availability = $${index++}, `;
+    values.push(availability);
+    fieldsProvided = true;
   }
 
+  // If no fields were provided, return an error
+  if (!fieldsProvided) {
+    return res.status(400).json({ message: "No fields provided for update" });
+  }
+
+  // Remove the last comma and space
+  query = query.slice(0, -2);
+  query += ` WHERE ObserverID = $${index} RETURNING ObserverID`;
+  values.push(id);
+
   try {
-    const result = await client.query(`
-      UPDATE Observer
-      SET U_ID = $1, TimeSlotID = $2, CourseID = $3, Name = $4, ScientificRank = $5, FatherName = $6, Availability = $7
-      WHERE ObserverID = $8
-      RETURNING ObserverID
-    `, [userID, timeSlotID, courseID, name, scientificRank, fatherName, availability, id]);
+    const result = await client.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ message: 'Observer not found' });
     }
 
     res.status(200).json({ message: 'Observer updated successfully', observerID: result.rows[0].ObserverID });
-
   } catch (err) {
     console.error('Error updating observer:', err);
     res.status(500).json({ message: 'Error updating observer' });

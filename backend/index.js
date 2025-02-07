@@ -31,7 +31,9 @@ app.get('/', (req, res) => {
 });
 
 // Use the exam routes
-app.use('/api/exams', examRoutes);
+app.use('/api/exam', examRoutes);
+
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

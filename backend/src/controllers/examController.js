@@ -5,7 +5,6 @@ const xlsx = require('xlsx'); // For parsing Excel files
 const storage = multer.memoryStorage(); // Store file in memory
 const upload = multer({ storage });
 
-
 const createExam = async (req, res) => {
     const { courseId, roomId, examName, examType, examDate, duration } = req.body;
 
@@ -54,13 +53,56 @@ const updateExam = async (req, res) => {
     const { id } = req.params;
     const { courseId, roomId, examName, examType, examDate, duration } = req.body;
 
+    // Start building the query
+    let query = `UPDATE ExamSchedule SET `;
+    const values = [];
+    let index = 1;
+    let fieldsProvided = false;
+
+    // Check which fields are provided and build the query
+    if (courseId) {
+        query += `CourseID = $${index++}, `;
+        values.push(courseId);
+        fieldsProvided = true;
+    }
+    if (roomId) {
+        query += `RoomID = $${index++}, `;
+        values.push(roomId);
+        fieldsProvided = true;
+    }
+    if (examName) {
+        query += `ExamName = $${index++}, `;
+        values.push(examName);
+        fieldsProvided = true;
+    }
+    if (examType) {
+        query += `ExamType = $${index++}, `;
+        values.push(examType);
+        fieldsProvided = true;
+    }
+    if (examDate) {
+        query += `ExamDate = $${index++}, `;
+        values.push(examDate);
+        fieldsProvided = true;
+    }
+    if (duration) {
+        query += `Duration = $${index++}, `;
+        values.push(duration);
+        fieldsProvided = true;
+    }
+
+    // If no fields were provided, return an error
+    if (!fieldsProvided) {
+        return res.status(400).json({ message: "No fields provided for update" });
+    }
+
+    // Remove the last comma and space
+    query = query.slice(0, -2);
+    query += ` WHERE ExamID = $${index} RETURNING *`;
+    values.push(id);
+
     try {
-        const result = await client.query(
-            `UPDATE ExamSchedule 
-             SET CourseID = $1, RoomID = $2, ExamName = $3, ExamType = $4, ExamDate = $5, Duration = $6 
-             WHERE ExamID = $7 RETURNING *`,
-            [courseId, roomId, examName, examType, examDate, duration, id]
-        );
+        const result = await client.query(query, values);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ message: "Exam not found" });
@@ -116,6 +158,7 @@ const uploadExamSchedule = async (req, res) => {
         res.status(500).json({ message: "Error processing file" });
     }
 };
+
 module.exports = {
     createExam,
     getAllExams,
@@ -123,4 +166,4 @@ module.exports = {
     updateExam,
     deleteExam,
     uploadExamSchedule,
-  };
+};
