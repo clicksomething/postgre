@@ -3,6 +3,7 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const userRoutes = require('../backend/src/routes/userRoutes.js'); // Importing user routes
+const authRoutes = require('../backend/src/routes/authRoutes.js')
 const { client } = require('../backend/database/db.js'); // Import the already established DB connection
 const initDB = require('./database/initDB');
 
@@ -12,6 +13,8 @@ app.use(bodyParser.json());
 const examRoutes = require('./src/routes/examRoutes');
 // Use middleware to handle JSON requests
 app.use(express.json());
+
+app.use("/api/auth", authRoutes);
 
 
 initDB().then(() => {
