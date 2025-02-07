@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const authenticateToken = (req, res, next) => {
-    const token = req.header('Authorization');
+    const token = req.header('Authorization')?.replace('Bearer ', ''); // Handle "Bearer " prefix
     if (!token) return res.status(401).json({ message: 'Access denied' });
 
     try {
@@ -15,7 +15,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 const authorizeAdmin = (req, res, next) => {
-    if (!req.user.isAdmin) {
+    if (!req.user || !req.user.isAdmin) { // Ensure req.user exists before checking isAdmin
         return res.status(403).json({ message: 'Access denied' });
     }
     next();

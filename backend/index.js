@@ -16,6 +16,13 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 
+console.log('Server is running on port ' + PORT);
+console.log('Database tables created successfully!');
+console.error('Error creating database tables:', error);
+console.error(err.stack);
+console.log('Exam Observer API is running!');
+console.log('Closing server and database connection...');
+
 
 initDB().then(() => {
   console.log('Database tables created successfully!');
