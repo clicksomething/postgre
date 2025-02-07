@@ -1,15 +1,17 @@
-import './App.css';
-import Login from './Login'; // Import the Login component
+import React from 'react';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Login from './Login';
+import ForgotPassword from './ForgotPassword'; // Import the ForgotPassword component
 
-function App() {
+const App = () => {
   return (
-    <div className="App">
-      <header className="App-header"> 
-        <Login />  {/* Include the Login component in the App */}
-       
-      </header>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;
