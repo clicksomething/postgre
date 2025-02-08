@@ -4,50 +4,73 @@ import './Login.css'; // Import the CSS file
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here you would typically handle the login logic, e.g., API call
-    if (username === '' || password === '') {
-      setError('Please fill in both fields.');
-    } else {
-      setError('');
-      // Simulate a successful login
-      console.log('Logging in with:', { username, password });
-      // Redirect or perform other actions after successful login
+    // Handle login logic here
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Success:', data);
+      } else {
+        const errorData = await response.json();
+        console.error('Login failed:', errorData);
+      }
+    } catch (error) {
+      console.error('Error during login:', error);
     }
   };
 
   return (
     <div className="login-container">
-      <h2>Login</h2>
-      <form onSubmit={handleSubmit} className="login-form">
+      <form className="login-form" onSubmit={handleSubmit}>
+        <h2 className="form-signin-heading">Please login</h2>
         <div className="input-group">
-          <label htmlFor="username" className="label">Username:</label>
+          <label className="label" htmlFor="username">Email Address</label>
           <input
             type="text"
+            className="input"
             id="username"
+            name="username"
+            required
+            autoFocus
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="input"
-            required
           />
         </div>
         <div className="input-group">
-          <label htmlFor="password" className="label">Password:</label>
+          <label className="label" htmlFor="password">Password</label>
           <input
             type="password"
+            className="input"
             id="password"
+            name="password"
+            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="input"
-            required
           />
         </div>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" className="button">Login</button>
-        <a href="/forgot-password" className="forgot-password">Forgot Password?</a>
+        <div className="input-group">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              value="remember-me"
+              id="rememberMe"
+              name="rememberMe"
+            /> 
+            Remember me
+          </label>
+        </div>
+        <button className="button" type="submit">Login</button>
+        <a href="/frontend/src/ForgotPassword.js" className="forgot-password">Forgot password?</a>
       </form>
     </div>
   );
