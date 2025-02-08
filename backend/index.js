@@ -1,6 +1,9 @@
 // index.js
 const express = require('express');
-const app = express();
+const cors = require('cors'); // Import CORS
+const app = express(); 
+app.use(cors()); // Use CORS middleware
+
 const bodyParser = require('body-parser');
 const userRoutes = require('../backend/src/routes/userRoutes.js'); // Importing user routes
 const authRoutes = require('../backend/src/routes/authRoutes.js');
