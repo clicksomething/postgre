@@ -2,19 +2,19 @@ import React, { useState } from 'react';
 import './Login.css'; // Import the CSS file
 
 const Login = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Handle login logic here
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('http://localhost:3000/api/auth/login', { // Use the correct backend URL
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }), // Use email instead of username
       });
 
       if (response.ok) {
@@ -34,16 +34,16 @@ const Login = () => {
       <form className="login-form" onSubmit={handleSubmit}>
         <h2 className="form-signin-heading">Please login</h2>
         <div className="input-group">
-          <label className="label" htmlFor="username">Email Address</label>
+          <label className="label" htmlFor="email">Email Address</label>
           <input
             type="text"
             className="input"
-            id="username"
-            name="username"
+            id="email"
+            name="email"
             required
             autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
         </div>
         <div className="input-group">
@@ -70,7 +70,7 @@ const Login = () => {
           </label>
         </div>
         <button className="button" type="submit">Login</button>
-        <a href="/frontend/src/ForgotPassword.js" className="forgot-password">Forgot password?</a>
+        <a href="/forgot-password" className="forgot-password">Forgot password?</a> {/* Update link to correct route */}
       </form>
     </div>
   );

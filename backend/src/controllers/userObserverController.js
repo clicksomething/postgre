@@ -5,7 +5,22 @@ const jwt = require('jsonwebtoken');
 
 // Create a new user
 const createUser = async (req, res) => {
-  const { name, email, phoneNum, password, isAdmin } = req.body;
+  const { name, email, phoneNum, password, role } = req.body; // Include role
+
+  // Check if name is provided
+  if (!name) {
+    return res.status(400).json({ message: 'Name is required' });
+  }
+
+  // Check if email is provided
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  // Check if phone number is provided
+  if (!phoneNum) {
+    return res.status(400).json({ message: 'Phone number is required' });
+  }
 
   // Check if password is provided
   if (!password) {
@@ -13,12 +28,27 @@ const createUser = async (req, res) => {
   }
 
   try {
+    // Check if email already exists
+    const existingUser = await client.query(
+      `SELECT * FROM UserInfo WHERE Email = $1`,
+      [email]
+    );
+
+    // Validate role
+    if (!['normal_user', 'admin', 'observer'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insert user data into UserInfo
     const userInfoResult = await client.query(
-      `INSERT INTO UserInfo (Name, Email, PhoneNum, Password)
+      `INSERT INTO UserInfo (Name, Email, PhoneNum, Password) 
        VALUES ($1, $2, $3, $4) RETURNING ID`,
       [name, email, phoneNum, hashedPassword]
     );
@@ -27,9 +57,9 @@ const createUser = async (req, res) => {
 
     // Insert user and associate with UserInfo (appuser)
     const userResult = await client.query(
-      `INSERT INTO appuser (U_ID, IsAdmin) 
-       VALUES ($1, $2) RETURNING UserID`,
-      [userInfoId, isAdmin]
+      `INSERT INTO AppUser (U_ID, RoleID) 
+       VALUES ($1, (SELECT RoleID FROM Roles WHERE RoleName = $2)) RETURNING UserID`,
+      [userInfoId, role]
     );
 
     res.status(201).json({ message: 'User created successfully', userId: userResult.rows[0].UserID });
@@ -41,14 +71,37 @@ const createUser = async (req, res) => {
 
 // Create a new observer
 const createObserver = async (req, res) => {
-  const { userID, timeSlotID, courseID, name, scientificRank, fatherName, availability } = req.body;
+  const { title, scientificRank, fatherName, availability, email, password, name, phoneNum } = req.body; // Include title
+
+  // Check if email is provided
+  if (!email) {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  // Check if name is provided
+  if (!name) {
+    return res.status(400).json({ message: 'Name is required' });
+  }
+
+  // Check if phone number is provided
+  if (!phoneNum) {
+    return res.status(400).json({ message: 'Phone number is required' });
+  }
+
+  // Check if password is provided
+  if (!password) {
+    return res.status(400).json({ message: 'Password is required' });
+  }
 
   try {
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     // Insert observer data into Observer
     const result = await client.query(
-      `INSERT INTO Observer (U_ID, TimeSlotID, CourseID, Name, ScientificRank, FatherName, Availability)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ObserverID`,
-      [userID, timeSlotID, courseID, name, scientificRank, fatherName, availability]
+      `INSERT INTO Observer (Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ObserverID`,
+      [email, hashedPassword, name, phoneNum, title, scientificRank, fatherName, availability]
     );
 
     res.status(201).json({ message: 'Observer created successfully', observerID: result.rows[0].ObserverID });
@@ -62,7 +115,7 @@ const createObserver = async (req, res) => {
 const getUsers = async (req, res) => {
   try {
     const result = await client.query(`
-      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.IsAdmin
+      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
     `);
@@ -77,11 +130,11 @@ const getUsers = async (req, res) => {
 const getObservers = async (req, res) => {
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Name AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
+      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
       FROM Observer o
-      JOIN UserInfo ui ON o.U_ID = ui.ID
-      JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
-      JOIN Course c ON o.CourseID = c.CourseID
+      LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
+      LEFT JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
+      LEFT JOIN Course c ON o.CourseID = c.CourseID
     `);
     res.status(200).json(result.rows);
   } catch (err) {
@@ -96,7 +149,7 @@ const getUserById = async (req, res) => {
 
   try {
     const result = await client.query(`
-      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.IsAdmin
+      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
       WHERE u.UserID = $1
@@ -119,11 +172,11 @@ const getObserverById = async (req, res) => {
 
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Name AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
+      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
       FROM Observer o
-      JOIN UserInfo ui ON o.U_ID = ui.ID
-      JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
-      JOIN Course c ON o.CourseID = c.CourseID
+      LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
+      LEFT JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
+      LEFT JOIN Course c ON o.CourseID = c.CourseID
       WHERE o.ObserverID = $1
     `, [id]);
 
@@ -141,20 +194,16 @@ const getObserverById = async (req, res) => {
 // Update a user
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phoneNum, password, isAdmin } = req.body;
+  const { name, email, phoneNum, password } = req.body;
 
   // Start building the query
-  let query = `UPDATE "appuser" SET `;
+let query = `UPDATE "userinfo" SET `;
+
   const values = [];
   let index = 1;
   let fieldsProvided = false;
 
   // Check which fields are provided and build the query
-  if (isAdmin !== undefined) {
-    query += `IsAdmin = $${index++}, `;
-    values.push(isAdmin);
-    fieldsProvided = true;
-  }
   if (name) {
     query += `Name = $${index++}, `;
     values.push(name);
@@ -184,7 +233,7 @@ const updateUser = async (req, res) => {
 
   // Remove the last comma and space
   query = query.slice(0, -2);
-  query += ` WHERE UserID = $${index} RETURNING UserID`;
+  query += ` WHERE ID = $${index} RETURNING ID`;
   values.push(id);
 
   try {
@@ -325,4 +374,3 @@ module.exports = {
   deleteUser,
   deleteObserver
 };
- 

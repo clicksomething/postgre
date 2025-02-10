@@ -11,7 +11,7 @@ const client = new Client({
 
 async function initDB() {
   const query = `
-    -- Check if the enum type already exists
+    -- Create the availability_enum type
     DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'availability_enum') THEN
         CREATE TYPE availability_enum AS ENUM ('full-time', 'part-time');
@@ -44,21 +44,41 @@ async function initDB() {
       EndTime TIMESTAMP NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS Roles (
+      RoleID SERIAL PRIMARY KEY,
+      RoleName VARCHAR(255) UNIQUE NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS Permissions (
+      PermissionID SERIAL PRIMARY KEY,
+      PermissionName VARCHAR(255) UNIQUE NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS RolePermissions (
+      RoleID INT REFERENCES Roles(RoleID) ON DELETE CASCADE,
+      PermissionID INT REFERENCES Permissions(PermissionID) ON DELETE CASCADE,
+      PRIMARY KEY (RoleID, PermissionID)
+    );
+
     CREATE TABLE IF NOT EXISTS AppUser (
       UserID SERIAL PRIMARY KEY,
       U_ID INT REFERENCES UserInfo(ID) ON DELETE CASCADE,
-      IsAdmin BOOLEAN NOT NULL DEFAULT FALSE
+      RoleID INT REFERENCES Roles(RoleID) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS Observer (
       ObserverID SERIAL PRIMARY KEY,
-      U_ID INT REFERENCES UserInfo(ID) ON DELETE CASCADE,
+      U_ID INT REFERENCES AppUser(UserID) ON DELETE CASCADE,
+      Email VARCHAR(255) NOT NULL,
+      Password VARCHAR(255) NOT NULL,
+      Name VARCHAR(255) NOT NULL,
+      PhoneNum VARCHAR(15),
+      Title VARCHAR(255),
+      ScientificRank VARCHAR(255),
+      FatherName VARCHAR(255),
+      Availability availability_enum NOT NULL,
       TimeSlotID INT REFERENCES TimeSlot(TimeSlotID) ON DELETE SET NULL,
-      CourseID INT REFERENCES Course(CourseID) ON DELETE SET NULL,
-      Name VARCHAR(255) NOT NULL,  -- Observer's Name
-      ScientificRank VARCHAR(255), -- Observer's Scientific Rank
-      FatherName VARCHAR(255),     -- Observer's Father's Name
-      Availability availability_enum NOT NULL  -- Observer's availability (Full-time or Part-time)
+      CourseID INT REFERENCES Course(CourseID) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS ExamSchedule (
@@ -92,9 +112,37 @@ async function initDB() {
     console.log("Starting to create tables...");
     // Execute the queries
     await client.query(query);
-    console.log("Enum type and tables created successfully!");
+    console.log("Tables created successfully!");
 
-    // Insert dummy data only if tables are empty
+    // Insert default roles and permissions
+    await client.query(`
+      INSERT INTO Roles (RoleName) VALUES
+      ('normal_user'),
+      ('admin'),
+      ('observer')
+      ON CONFLICT (RoleName) DO NOTHING;
+    `);
+
+    await client.query(`
+      INSERT INTO Permissions (PermissionName) VALUES
+      ('upload_schedule'),
+      ('manage_users'),
+      ('view_schedule')
+      ON CONFLICT (PermissionName) DO NOTHING;
+    `);
+
+    await client.query(`
+      INSERT INTO RolePermissions (RoleID, PermissionID) VALUES
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'normal_user'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'upload_schedule')),
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'normal_user'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule')),
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'manage_users')),
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'upload_schedule')),
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule')),
+      ((SELECT RoleID FROM Roles WHERE RoleName = 'observer'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule'))
+      ON CONFLICT DO NOTHING;
+    `);
+
+    // Insert dummy data into UserInfo if empty
     const userCount = await client.query('SELECT COUNT(*) FROM UserInfo');
     if (parseInt(userCount.rows[0].count) === 0) {
       await client.query(`
@@ -105,6 +153,31 @@ async function initDB() {
       `);
     }
 
+    // Insert dummy data into AppUser if empty
+    const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
+    if (parseInt(appUserCount.rows[0].count) === 0) {
+      await client.query(`
+INSERT INTO AppUser (U_ID, RoleID) VALUES
+(1, (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')),
+(2, (SELECT RoleID FROM Roles WHERE RoleName = 'admin')),
+(3, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
+(1, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
+(2, (SELECT RoleID FROM Roles WHERE RoleName = 'observer'));
+
+      `);
+    }
+
+    // Insert dummy data into Observer if empty
+    const observerCount = await client.query('SELECT COUNT(*) FROM Observer');
+    if (parseInt(observerCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO Observer (U_ID, TimeSlotID, CourseID, Title, ScientificRank, FatherName, Availability, Email, Password, Name, PhoneNum) VALUES
+        (1, NULL, NULL, 'Dr.', 'Professor', 'John Smith', 'full-time', 'john.smith@example.com', 'observerpassword', 'John Smith', '1234567890'),
+        (2, NULL, NULL, 'Prof.', 'Associate Professor', 'Robert Johnson', 'part-time', 'robert.johnson@example.com', 'observerpassword', 'Robert Johnson', '0987654321');
+      `);
+    }
+
+    // Insert dummy data into Course if empty
     const courseCount = await client.query('SELECT COUNT(*) FROM Course');
     if (parseInt(courseCount.rows[0].count) === 0) {
       await client.query(`
@@ -117,6 +190,7 @@ async function initDB() {
       `);
     }
 
+    // Insert dummy data into Room if empty
     const roomCount = await client.query('SELECT COUNT(*) FROM Room');
     if (parseInt(roomCount.rows[0].count) === 0) {
       await client.query(`
@@ -129,6 +203,7 @@ async function initDB() {
       `);
     }
 
+    // Insert dummy data into TimeSlot if empty
     const timeSlotCount = await client.query('SELECT COUNT(*) FROM TimeSlot');
     if (parseInt(timeSlotCount.rows[0].count) === 0) {
       await client.query(`
@@ -139,25 +214,7 @@ async function initDB() {
       `);
     }
 
-    const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
-    if (parseInt(appUserCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO AppUser (U_ID, IsAdmin) VALUES
-        (1, TRUE),
-        (2, FALSE),
-        (3, FALSE);
-      `);
-    }
-
-    const observerCount = await client.query('SELECT COUNT(*) FROM Observer');
-    if (parseInt(observerCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO Observer (U_ID, TimeSlotID, CourseID, Name, ScientificRank, FatherName, Availability) VALUES
-        (1, 1, 1, 'Dr. Emily White', 'Professor', 'John White', 'full-time'),
-        (2, 2, 2, 'Dr. Michael Green', 'Associate Professor', 'Robert Green', 'part-time');
-      `);
-    }
-
+    // Insert dummy data into ExamSchedule if empty
     const examScheduleCount = await client.query('SELECT COUNT(*) FROM ExamSchedule');
     if (parseInt(examScheduleCount.rows[0].count) === 0) {
       await client.query(`
@@ -167,6 +224,7 @@ async function initDB() {
       `);
     }
 
+    // Insert dummy data into Preferences if empty
     const preferencesCount = await client.query('SELECT COUNT(*) FROM Preferences');
     if (parseInt(preferencesCount.rows[0].count) === 0) {
       await client.query(`
@@ -176,6 +234,7 @@ async function initDB() {
       `);
     }
 
+    // Insert dummy data into DistributeSchedule if empty
     const distributeScheduleCount = await client.query('SELECT COUNT(*) FROM DistributeSchedule');
     if (parseInt(distributeScheduleCount.rows[0].count) === 0) {
       await client.query(`
@@ -195,7 +254,6 @@ async function initDB() {
   } finally {
     await client.end();
   }
+  
 }
-
-// Export the function to be used in index.js
 module.exports = initDB;
