@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Login from './Login'; // Import your Login component
-import ForgotPassword from './ForgotPassword'; // Import your Forgot Password component
+import Login from './components/Observer/Login'; // Import your Login component
+import ForgotPassword from './components/Observer/ForgotPassword'; // Import your Forgot Password component
 import ViewObservers from './components/Observer/ViewObservers'; // Import View Observers component
 
 

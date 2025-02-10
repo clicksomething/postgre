@@ -9,7 +9,6 @@ const userRoutes = require('../backend/src/routes/userRoutes.js'); // Importing 
 const authRoutes = require('../backend/src/routes/authRoutes.js');
 const { client } = require('../backend/database/db.js'); // Import the already established DB connection
 const initDB = require('./database/initDB');
-const cors = require('cors'); // Import CORS
 app.use(cors()); // Enable CORS for all routes
 // Middleware to parse incoming JSON data
 app.use(bodyParser.json());
