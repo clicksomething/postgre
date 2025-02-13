@@ -1,0 +1,29 @@
+.success-messages {
+    position: fixed;
+    bottom: 20px; /* Distance from the bottom */
+    right: 20px; /* Distance from the right */
+    z-index: 1000; /* Ensure it appears above other elements */
+  }
+  
+  .success-message {
+    background-color: #4caf50; /* Green background */
+    color: white; /* White text */
+    padding: 10px 20px; /* Padding */
+    border-radius: 5px; /* Rounded corners */
+    display: flex;
+    align-items: center; /* Center icon and text vertically */
+    margin-bottom: 10px; /* Space between messages */
+  }
+  
+  .success-message i {
+    margin-right: 10px; /* Space between icon and text */
+  }
+  
+  .close-button {
+    background: none; /* No background */
+    border: none; /* No border */
+    color: white; /* White color */
+    font-size: 16px; /* Font size */
+    margin-left: 10px; /* Space between text and close button */
+    cursor: pointer; /* Pointer cursor */
+  }

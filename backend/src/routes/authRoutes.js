@@ -1,12 +1,15 @@
 const express = require('express');
-const { registerUser, login } = require('../controllers/authController');
+const { registerUser, login, validateToken } = require('../controllers/authController');
 const { authenticateToken, authorizeAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 // Public Routes (No authentication needed)
-router.post('/register', registerUser);
+router.post('/register', registerUser );
 router.post('/login', login);
+
+// New Validate Token Route
+router.get('/validateToken', validateToken);
 
 // Protected Route Example (Requires Authentication)
 router.get('/protected', authenticateToken, (req, res) => {

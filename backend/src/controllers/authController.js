@@ -71,9 +71,6 @@ const login = async (req, res) => {
         const user = result.rows[0];
         console.log('Retrieved user data:', user); // Log the retrieved user data for debugging
 
-        console.log('Password being compared:', password); // Log the password for debugging
-        console.log('Hashed password from DB:', user.Password); // Log the hashed password for debugging
-
         const isMatch = await bcrypt.compare(password, user.password); // Ensure correct field is used
 
         if (!isMatch) {
@@ -86,14 +83,39 @@ const login = async (req, res) => {
             { expiresIn: '1h' }
         );
 
-        res.json({ token, userId: user.UserID, roleId: user.RoleID });
+        return res.json({
+            token,
+            userId: user.UserID,
+            roleId: user.RoleID,
+            isAdmin: user.roleid === 2 // Directly check roleID for admin status
+        });
     } catch (err) {
         console.error('Error during login:', err);
-        res.status(500).json({ message: 'Internal server error', error: err.message }); // Include error message in response
+        res.status(500).json({ message: 'Internal server error', error: err.message });
+    }
+};
+
+// Add the validateToken function
+const validateToken = (req, res) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+
+    try {
+        // Verify the token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        res.status(200).json({ valid: true, user: decoded });
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: 'Token expired' });
+        }
+        res.status(403).json({ message: 'Invalid token' });
     }
 };
 
 module.exports = { 
     login,
-    registerUser
+    registerUser,
+    validateToken // Export the new function
 };

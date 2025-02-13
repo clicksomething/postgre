@@ -7,6 +7,11 @@ const jwt = require('jsonwebtoken');
 const createUser = async (req, res) => {
   const { name, email, phoneNum, password, role } = req.body; // Include role
 
+  // Validate role
+  if (!['normal_user', 'admin', 'observer'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+  }
+
   // Check if name is provided
   if (!name) {
     return res.status(400).json({ message: 'Name is required' });
@@ -114,12 +119,18 @@ const createObserver = async (req, res) => {
 // Get all users (with userInfo)
 const getUsers = async (req, res) => {
   try {
-    const result = await client.query(`
-      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.RoleID
+    const result = await client.query(` 
+      SELECT ui.ID, ui.Name, ui.Email, ui.PhoneNum, MIN(u.RoleID) AS RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
+      GROUP BY ui.ID, ui.Name, ui.Email, ui.PhoneNum
     `);
-    res.status(200).json(result.rows);
+
+    res.status(200).json(result.rows.map(user => ({
+      ...user,
+      isAdmin: user.roleid === 2 // Indicate if the user is an admin based on RoleID
+    })));
+
   } catch (err) {
     console.error('Error retrieving users:', err);
     res.status(500).json({ message: 'Error retrieving users' });
@@ -129,7 +140,7 @@ const getUsers = async (req, res) => {
 // Get all observers (with userInfo and timeSlot info)
 const getObservers = async (req, res) => {
   try {
-    const result = await client.query(`
+    const result = await client.query(` 
       SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
@@ -148,7 +159,7 @@ const getUserById = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await client.query(`
+    const result = await client.query(` 
       SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
@@ -171,7 +182,7 @@ const getObserverById = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await client.query(`
+    const result = await client.query(` 
       SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
@@ -191,13 +202,12 @@ const getObserverById = async (req, res) => {
   }
 };
 
-// Update a user
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phoneNum, password } = req.body;
+  const { name, email, phonenum, password } = req.body; // Use "phonenum" instead of "phoneNum"
 
   // Start building the query
-let query = `UPDATE "userinfo" SET `;
+  let query = `UPDATE "userinfo" SET `;
 
   const values = [];
   let index = 1;
@@ -214,9 +224,9 @@ let query = `UPDATE "userinfo" SET `;
     values.push(email);
     fieldsProvided = true;
   }
-  if (phoneNum) {
-    query += `PhoneNum = $${index++}, `;
-    values.push(phoneNum);
+  if (phonenum) { // Use "phonenum" instead of "phoneNum"
+    query += `PhoneNum = $${index++}, `; // Keep "PhoneNum" in the query (database column name)
+    values.push(phonenum);
     fieldsProvided = true;
   }
   if (password) {
@@ -249,7 +259,6 @@ let query = `UPDATE "userinfo" SET `;
     res.status(500).json({ message: 'Error updating user' });
   }
 };
-
 // Update an observer
 const updateObserver = async (req, res) => {
   const { id } = req.params;
@@ -322,23 +331,52 @@ const updateObserver = async (req, res) => {
   }
 };
 
-// Delete a user
 const deleteUser = async (req, res) => {
   const { id } = req.params;
 
-  try {
-    const result = await client.query(`
-      DELETE FROM "appuser" WHERE UserID = $1 RETURNING UserID
-    `, [id]);
+  // Validate the U_ID
+  const uId = parseInt(id, 10);
+  if (isNaN(uId)) {
+    return res.status(400).json({ message: 'Invalid U_ID' });
+  }
 
-    if (result.rowCount === 0) {
+  console.log('Deleting user with U_ID:', uId); // Debugging line
+
+  try {
+    // Check if the user is an observer
+    const roleResult = await client.query(
+      `SELECT RoleID FROM "appuser" WHERE U_ID = $1`,
+      [uId]
+    );
+
+    if (roleResult.rowCount === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    const roleId = roleResult.rows[0].roleid;
+    console.log('User role ID:', roleId); // Debugging line
+
+    if (roleId === 3) {
+      // If the user is an observer
+      return res.status(400).json({ message: 'Cannot delete an observer' });
+    }
+
+    // Delete from appuser table using U_ID
+    await client.query(
+      `DELETE FROM "appuser" WHERE U_ID = $1`,
+      [uId]
+    );
+
+    // Delete from UserInfo table using U_ID
+    await client.query(
+      `DELETE FROM "userinfo" WHERE ID = $1`,
+      [uId]
+    );
 
     res.status(200).json({ message: 'User deleted successfully' });
   } catch (err) {
     console.error('Error deleting user:', err);
-    res.status(500).json({ message: 'Error deleting user' });
+    res.status(500).json({ message: `Error deleting user: ${err.message}` });
   }
 };
 

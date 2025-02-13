@@ -1,0 +1,125 @@
+body {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 100vh;
+	margin: 0;
+	background-color: #f8f9fa; /* Light gray background */
+	font-family: 'Inter', sans-serif; /* Use Inter font (or similar) */
+  }
+  
+  .login-container {
+	max-width: 400px;
+	width: 100%;
+	padding: 2rem;
+	border-radius: 12px;
+	background-color: #ffffff; /* White background */
+	box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  }
+  
+  .login-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem; /* Spacing between form elements */
+  }
+  
+  .form-signin-heading {
+	font-size: 1.75rem;
+	font-weight: 600;
+	color: #2d3748; /* Dark gray text */
+	text-align: center;
+	margin-bottom: 1.5rem;
+  }
+  
+  .input-group {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem; /* Spacing between label and input */
+  }
+  
+  .label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #4a5568; /* Medium gray text */
+  }
+  
+  .input {
+	padding: 0.75rem;
+	font-size: 0.875rem;
+	border: 1px solid #e2e8f0; /* Light gray border */
+	border-radius: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	background-color: #f8f9fa; /* Light gray background for inputs */
+	transition: border-color 0.3s ease;
+  }
+  
+  .input:focus {
+	border-color: #4c51bf; /* Purple border on focus */
+	outline: none;
+  }
+  
+  .checkbox {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.875rem;
+	color: #4a5568; /* Medium gray text */
+  }
+  
+  .checkbox input {
+	margin: 0;
+  }
+  
+  .button {
+	padding: 0.75rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #ffffff; /* White text */
+	background-color: #4c51bf; /* Purple background */
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	width: 100%;
+	transition: background-color 0.3s ease;
+  }
+  
+  .button:hover {
+	background-color: #434190; /* Darker purple on hover */
+  }
+  
+  .forgot-password {
+	font-size: 0.875rem;
+	color: #4c51bf; /* Purple text */
+	text-align: center;
+	text-decoration: none;
+	transition: color 0.3s ease;
+  }
+  
+  .forgot-password:hover {
+	color: #434190; /* Darker purple on hover */
+	text-decoration: underline; 	
+  }
+  
+  .error-message {
+	font-size: 0.875rem;
+	color: #e53e3e; /* Red text for errors */
+	text-align: center;
+	margin-bottom: 1rem;
+  }
+  .input-with-icon {
+	position: relative;
+	display: flex;
+	align-items: center;
+  }
+  
+  .icon {
+	position: absolute;
+	left: 10px;
+	color: #a0aec0; /* Light gray icon color */
+	font-size: 16px;
+  }
+  
+  .input-with-icon .input {
+	padding-left: 40px; /* Add padding to the left to make space for the icon */
+  }

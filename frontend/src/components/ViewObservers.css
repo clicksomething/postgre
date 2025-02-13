@@ -1,0 +1,53 @@
+/* ViewObservers.css */
+
+.view-observers-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  background-color: #f8f9fa; /* Light gray background */
+  font-family: 'Inter', sans-serif; /* Use the same font as Login */
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #2d3748; /* Dark gray text */
+  margin-bottom: 1.5rem;
+}
+
+.observers-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden; /* To round the corners of the table */
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 12px; /* Increased padding for better spacing */
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2; /* Light gray header */
+  font-weight: 600; /* Bold header text */
+}
+
+/* Hover effect for table rows */
+tbody tr:hover {
+  background-color: #e2e8f0; /* Light gray background on hover */
+}
+
+tbody tr:nth-child(even) {
+  background-color: #f9f9f9; /* Zebra striping for even rows */
+}
+
+tbody tr:nth-child(odd) {
+  background-color: #ffffff; /* White background for odd rows */
+}
+
+tbody tr:hover td {
+  color: #2d3748; /* Change text color on hover if needed */
+}

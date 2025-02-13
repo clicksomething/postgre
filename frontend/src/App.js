@@ -1,19 +1,80 @@
-import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import Login from './components/Observer/Login'; // Import your Login component
-import ForgotPassword from './components/Observer/ForgotPassword'; // Import your Forgot Password component
-import ViewObservers from './components/Observer/ViewObservers'; // Import View Observers component
-
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import '@fortawesome/fontawesome-free/css/all.min.css';
+import ForgotPassword from './components/ForgotPassword';
+import Login from './components/Login';
+import ViewObservers from './components/ViewObservers';
+import Dashboard from './components/Dashboard';
+import EditUsers from './components/EditUsers';
+import Navbar from './components/Navbar'; // Import the Navbar component
+import CreateUser from './components/CreateUser';
 
 const App = () => {
+  const [role, setRole] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    const savedRole = localStorage.getItem('userRole');
+
+    const validateToken = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/auth/validateToken', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          setRole(savedRole);
+        } else {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('userRole');
+          setRole(null);
+        }
+      } catch (error) {
+        console.error('Token validation failed:', error);
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userRole');
+        setRole(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (token && savedRole) {
+      validateToken();
+    } else {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleLogin = (userRole) => {
+    setRole(userRole);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userRole');
+    setRole(null);
+  };
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <Router>
       <div>
-      <Routes>
-        <Route path="/view-observers" element={<ViewObservers />} /> {/* Route for View Observers */}
-
-          <Route path="/" element={<Login />} /> {/* Route for the Login page */}
-          <Route path="/forgot-password" element={<ForgotPassword />} /> {/* Route for the Forgot Password page */}
+        {/* Conditionally render the Navbar only if the user is logged in */}
+        {role && <Navbar onLogout={handleLogout} />} {/* Include the Navbar here */}
+        <Routes>
+          <Route path="/" element={<Login onLoginSuccess={handleLogin} />} />
+          <Route path="/login" element={<Login onLoginSuccess={handleLogin} />} /> {/* Explicit login route */}
+          <Route path="/dashboard" element={role === 'admin' ? <Dashboard /> : <Navigate to="/login" />} />
+          <Route path="/edit-users" element={role === 'admin' ? <EditUsers /> : <Navigate to="/login" />} />
+          <Route path="/create-user" element={role === 'admin' ? <CreateUser /> : <Navigate to="/login" />} />          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/view-observers" element={<ViewObservers />} />
         </Routes>
       </div>
     </Router>
