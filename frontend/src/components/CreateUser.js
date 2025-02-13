@@ -8,7 +8,7 @@ const CreateUser = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    phonenum: '',
+    phoneNum: '', // Add phoneNum field
     password: '',
     role: 'normal_user', // Default to 'normal_user'
   });
@@ -30,7 +30,7 @@ const CreateUser = () => {
     const newErrors = {};
     if (!formData.name) newErrors.name = 'Name is required';
     if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.phonenum) newErrors.phonenum = 'Phone number is required';
+    if (!formData.phoneNum) newErrors.phoneNum = 'Phone number is required';
     if (!formData.password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0; // Return true if no errors
@@ -69,7 +69,7 @@ const CreateUser = () => {
       setFormData({
         name: '',
         email: '',
-        phonenum: '',
+        phoneNum: '',
         password: '',
         role: 'normal_user', // Reset to default role
       });
@@ -123,13 +123,13 @@ const CreateUser = () => {
           Phone Number:
           <input
             type="text"
-            name="phonenum"
-            value={formData.phonenum}
+            name="phoneNum"
+            value={formData.phoneNum}
             onChange={handleInputChange}
             required
-            className={errors.phonenum ? 'input-error' : ''}
+            className={errors.phoneNum ? 'input-error' : ''}
           />
-          {errors.phonenum && <span className="error-message">{errors.phonenum}</span>}
+          {errors.phoneNum && <span className="error-message">{errors.phoneNum}</span>}
         </label>
         <label>
           Password:
@@ -153,7 +153,6 @@ const CreateUser = () => {
           >
             <option value="normal_user">Normal User</option>
             <option value="admin">Admin</option>
-            <option value="observer">Observer</option>
           </select>
         </label>
         {errors.submit && <span className="error-message">{errors.submit}</span>}
