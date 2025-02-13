@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom'; // Import Link for navigation
 import axios from 'axios';
 import './ViewObservers.css';
 
@@ -6,19 +7,14 @@ const ViewObservers = () => {
   const [observers, setObservers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   console.log("Fetching observers..."); // Log to console for debugging
 
   useEffect(() => {
     const fetchObservers = async () => {
       try {
         const response = await axios.get('http://localhost:3000/api/observers'); // Fetching observers data
-        
         console.log("Response data:", response.data); // Log the response data for debugging
-
-
-       
-
         setObservers(response.data);
       } catch (err) {
         console.error("Error fetching observers:", err); // Log error to console
@@ -34,9 +30,10 @@ const ViewObservers = () => {
   if (loading) return <div>Loading...</div>; 
   if (error) return <div>Error: {error}</div>; // Display error message
 
-  return (
+  return (  
     <div>
       <h1>Observers Information</h1>
+      <Link to="/view-exam-schedule">View Exam Schedule</Link> {/* Navigation link to View Exam Schedule */}
       <table>
         <thead>
           <tr>
@@ -57,7 +54,6 @@ const ViewObservers = () => {
               <td>{observer.availability}</td>
               <td>{observer.courseName}</td>
               <td>{observer.starttime} - {observer.endtime}</td>
-
             </tr>
           ))}
         </tbody>

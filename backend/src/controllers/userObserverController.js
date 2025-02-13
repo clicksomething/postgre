@@ -111,6 +111,30 @@ const createObserver = async (req, res) => {
   }
 };
 
+// Add a new time slot for an observer
+const addTimeSlot = async (req, res) => {
+  const { startTime, endTime, observerId, day } = req.body;
+
+  // Validate input
+  if (!startTime || !endTime || !observerId || !day) {
+    return res.status(400).json({ message: 'Start time, end time, observer ID, and day are required' });
+  }
+
+  try {
+    // Insert the new time slot into the TimeSlot table
+    const result = await client.query(
+      `INSERT INTO TimeSlot (StartTime, EndTime, ObserverID, Day) 
+       VALUES ($1, $2, $3, $4) RETURNING TimeSlotID`,
+      [startTime, endTime, observerId, day]
+    );
+
+    res.status(201).json({ message: 'Time slot added successfully', timeSlotId: result.rows[0].TimeSlotID });
+  } catch (err) {
+    console.error('Error adding time slot:', err);
+    res.status(500).json({ message: 'Error adding time slot', error: err.message });
+  }
+};
+
 // Get all users (with userInfo)
 const getUsers = async (req, res) => {
   try {
@@ -130,11 +154,12 @@ const getUsers = async (req, res) => {
 const getObservers = async (req, res) => {
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
+      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, ts.Day, c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
-      LEFT JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
+      LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
       LEFT JOIN Course c ON o.CourseID = c.CourseID
+      ORDER BY o.ObserverID, ts.Day
     `);
     res.status(200).json(result.rows);
   } catch (err) {
@@ -172,19 +197,20 @@ const getObserverById = async (req, res) => {
 
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, c.CourseName
+      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, ts.Day, c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
-      LEFT JOIN TimeSlot ts ON o.TimeSlotID = ts.TimeSlotID
+      LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
       LEFT JOIN Course c ON o.CourseID = c.CourseID
       WHERE o.ObserverID = $1
+      ORDER BY ts.Day
     `, [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Observer not found' });
     }
 
-    res.status(200).json(result.rows[0]);
+    res.status(200).json(result.rows);
   } catch (err) {
     console.error('Error retrieving observer:', err);
     res.status(500).json({ message: 'Error retrieving observer' });
@@ -197,7 +223,7 @@ const updateUser = async (req, res) => {
   const { name, email, phoneNum, password } = req.body;
 
   // Start building the query
-let query = `UPDATE "userinfo" SET `;
+  let query = `UPDATE "userinfo" SET `;
 
   const values = [];
   let index = 1;
@@ -253,7 +279,7 @@ let query = `UPDATE "userinfo" SET `;
 // Update an observer
 const updateObserver = async (req, res) => {
   const { id } = req.params;
-  const { userID, timeSlotID, courseID, name, scientificRank, fatherName, availability } = req.body;
+  const { userID, courseID, name, scientificRank, fatherName, availability } = req.body;
 
   // Start building the query
   let query = `UPDATE Observer SET `;
@@ -265,11 +291,6 @@ const updateObserver = async (req, res) => {
   if (userID) {
     query += `U_ID = $${index++}, `;
     values.push(userID);
-    fieldsProvided = true;
-  }
-  if (timeSlotID) {
-    query += `TimeSlotID = $${index++}, `;
-    values.push(timeSlotID);
     fieldsProvided = true;
   }
   if (courseID) {
@@ -365,6 +386,7 @@ const deleteObserver = async (req, res) => {
 module.exports = {
   createUser,
   createObserver,
+  addTimeSlot,
   getUsers,
   getObservers,
   getUserById,

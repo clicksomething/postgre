@@ -38,11 +38,6 @@ async function initDB() {
       SeatingCapacity INT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS TimeSlot (
-      TimeSlotID SERIAL PRIMARY KEY,
-      StartTime TIMESTAMP NOT NULL,
-      EndTime TIMESTAMP NOT NULL
-    );
 
     CREATE TABLE IF NOT EXISTS Roles (
       RoleID SERIAL PRIMARY KEY,
@@ -77,8 +72,15 @@ async function initDB() {
       ScientificRank VARCHAR(255),
       FatherName VARCHAR(255),
       Availability availability_enum NOT NULL,
-      TimeSlotID INT REFERENCES TimeSlot(TimeSlotID) ON DELETE SET NULL,
       CourseID INT REFERENCES Course(CourseID) ON DELETE SET NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS TimeSlot (
+      TimeSlotID SERIAL PRIMARY KEY,
+      StartTime TIME  NOT NULL,
+      EndTime TIME  NOT NULL,
+      day VARCHAR(10),
+      ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS ExamSchedule (
@@ -86,9 +88,10 @@ async function initDB() {
       CourseID INT REFERENCES Course(CourseID) ON DELETE CASCADE,
       RoomID INT REFERENCES Room(RoomID) ON DELETE CASCADE,
       ExamName VARCHAR(255) NOT NULL,
-      ExamType VARCHAR(50),
-      ExamDate DATE NOT NULL,
-      Duration INTERVAL NOT NULL
+      StartTime TIME  NOT NULL,
+      EndTime TIME  NOT NULL,
+      NumOfStudents INT,
+      ExamDate DATE NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS Preferences (
@@ -157,13 +160,12 @@ async function initDB() {
     const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
     if (parseInt(appUserCount.rows[0].count) === 0) {
       await client.query(`
-INSERT INTO AppUser (U_ID, RoleID) VALUES
-(1, (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')),
-(2, (SELECT RoleID FROM Roles WHERE RoleName = 'admin')),
-(3, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
-(1, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
-(2, (SELECT RoleID FROM Roles WHERE RoleName = 'observer'));
-
+        INSERT INTO AppUser (U_ID, RoleID) VALUES
+        (1, (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')),
+        (2, (SELECT RoleID FROM Roles WHERE RoleName = 'admin')),
+        (3, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
+        (1, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
+        (2, (SELECT RoleID FROM Roles WHERE RoleName = 'observer'));
       `);
     }
 
@@ -171,9 +173,9 @@ INSERT INTO AppUser (U_ID, RoleID) VALUES
     const observerCount = await client.query('SELECT COUNT(*) FROM Observer');
     if (parseInt(observerCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO Observer (U_ID, TimeSlotID, CourseID, Title, ScientificRank, FatherName, Availability, Email, Password, Name, PhoneNum) VALUES
-        (1, NULL, NULL, 'Dr.', 'Professor', 'John Smith', 'full-time', 'john.smith@example.com', 'observerpassword', 'John Smith', '1234567890'),
-        (2, NULL, NULL, 'Prof.', 'Associate Professor', 'Robert Johnson', 'part-time', 'robert.johnson@example.com', 'observerpassword', 'Robert Johnson', '0987654321');
+        INSERT INTO Observer (U_ID, CourseID, Title, ScientificRank, FatherName, Availability, Email, Password, Name, PhoneNum) VALUES
+        (1, NULL, 'Dr.', 'Professor', 'John Smith', 'full-time', 'john.smith@example.com', 'observerpassword', 'John Smith', '1234567890'),
+        (2, NULL, 'Prof.', 'Associate Professor', 'Robert Johnson', 'part-time', 'robert.johnson@example.com', 'observerpassword', 'Robert Johnson', '0987654321');
       `);
     }
 
@@ -207,10 +209,10 @@ INSERT INTO AppUser (U_ID, RoleID) VALUES
     const timeSlotCount = await client.query('SELECT COUNT(*) FROM TimeSlot');
     if (parseInt(timeSlotCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO TimeSlot (StartTime, EndTime) VALUES
-        ('2023-10-01 09:00:00', '2023-10-01 10:00:00'),
-        ('2023-10-01 10:30:00', '2023-10-01 11:30:00'),
-        ('2023-10-01 12:00:00', '2023-10-01 13:00:00');
+        INSERT INTO TimeSlot (StartTime, EndTime, day, ObserverID) VALUES
+        (' 09:00:00', ' 10:00:00', 'Monday', 1),
+        (' 10:30:00', ' 11:30:00', 'Monday', 1),
+        (' 12:00:00', ' 13:00:00', 'Monday', 1);
       `);
     }
 
@@ -218,9 +220,9 @@ INSERT INTO AppUser (U_ID, RoleID) VALUES
     const examScheduleCount = await client.query('SELECT COUNT(*) FROM ExamSchedule');
     if (parseInt(examScheduleCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, ExamDate, Duration) VALUES
-        (1, 1, 'Midterm Exam', 'Written', '2023-10-15', '2 hours'),
-        (2, 2, 'Final Exam', 'Written', '2023-12-10', '3 hours');
+        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, ExamDate) VALUES
+        (1, 1, 'Midterm Exam',  '09:00:00', ' 11:00:00', 30, '2023-10-15'),
+        (2, 2, 'Final Exam', '10:00:00', ' 13:00:00', 25, '2023-12-10');
       `);
     }
 
@@ -254,6 +256,6 @@ INSERT INTO AppUser (U_ID, RoleID) VALUES
   } finally {
     await client.end();
   }
-  
 }
+
 module.exports = initDB;

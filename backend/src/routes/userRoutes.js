@@ -19,7 +19,7 @@ router.get('/users/:id', userObserverController.getUserById);      // Get a user
 router.put('/users/:id', userObserverController.updateUser);      // Update a user
 router.delete('/users/:id', userObserverController.deleteUser);   // Delete a user
 
-// Observer Routes
+router.post('/add-time-slot', userObserverController.addTimeSlot); // Route to add a new time slot for an observer
 router.post('/observers', userObserverController.createObserver); // Create a new observer
 router.get('/observers', userObserverController.getObservers);    // Get all observers
 router.get('/observers/:id', userObserverController.getObserverById); // Get an observer by ID
