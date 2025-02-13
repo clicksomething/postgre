@@ -1,53 +1,64 @@
 /* ViewObservers.css */
 
 .view-observers-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
   padding: 2rem;
+  padding-top: 80px; /* Adjust this value based on your navbar height */
   background-color: #f8f9fa; /* Light gray background */
-  font-family: 'Inter', sans-serif; /* Use the same font as Login */
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  overflow-y: auto; /* Allow vertical scrolling */
+  height: calc(100vh - 80px); /* Set height to fill the viewport minus navbar height */
 }
 
-h1 {
-  font-size: 2rem;
-  font-weight: 600;
-  color: #2d3748; /* Dark gray text */
-  margin-bottom: 1.5rem;
+.search-bar {
+  margin-bottom: 1.5rem; /* Space below the search bar */
+}
+
+.search-bar input {
+  width: 100%; /* Full width */
+  padding: 0.75rem; /* Padding for input */
+  border: 1px solid #ced4da; /* Light gray border */
+  border-radius: 4px; /* Rounded corners */
+  font-size: 1rem; /* Font size */
+  color: #4a5568; /* Medium gray text */
+  box-sizing: border-box; /* Ensure padding is included in the width */
+}
+
+.search-bar input:focus {
+  border-color: #4c51bf; /* Purple border on focus */
+  outline: none; /* Remove default outline */
+  box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.1); /* Subtle focus shadow */
 }
 
 .observers-table {
   width: 100%;
-  border-collapse: collapse;
-  border-radius: 12px;
-  overflow: hidden; /* To round the corners of the table */
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  border-collapse: collapse; /* Collapse borders */
+  margin-bottom: 2rem; /* Space below the table */
 }
 
-th, td {
-  border: 1px solid #ddd;
-  padding: 12px; /* Increased padding for better spacing */
-  text-align: left;
+.observers-table th, .observers-table td {
+  border: 1px solid #dee2e6; /* Light gray border */
+  padding: 0.75rem; /* Padding for table cells */
+  text-align: left; /* Align text to the left */
 }
 
-th {
-  background-color: #f2f2f2; /* Light gray header */
-  font-weight: 600; /* Bold header text */
+.observers-table th {
+  background-color: #007bff; /* Blue background for header */
+  color: white; /* White text for header */
+  font-weight: bold; /* Bold text for header */
 }
 
-/* Hover effect for table rows */
-tbody tr:hover {
-  background-color: #e2e8f0; /* Light gray background on hover */
+.observers-table tr:hover {
+  background-color: #f1f1f1; /* Light gray background on row hover */
 }
 
-tbody tr:nth-child(even) {
-  background-color: #f9f9f9; /* Zebra striping for even rows */
+/* Center-align timeslot columns */
+.observers-table td:nth-child(n+6) {
+  text-align: center;
 }
 
-tbody tr:nth-child(odd) {
-  background-color: #ffffff; /* White background for odd rows */
-}
-
-tbody tr:hover td {
-  color: #2d3748; /* Change text color on hover if needed */
+.observers-table td:nth-child(n+6) {
+  text-align: center; /* Center-align timeslot columns */
 }
