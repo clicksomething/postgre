@@ -154,14 +154,60 @@ const getUsers = async (req, res) => {
 const getObservers = async (req, res) => {
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, ts.Day, c.CourseName
+      SELECT 
+        o.ObserverID, 
+        ui.Name, 
+        ui.Email, 
+        o.Title AS ObserverTitle, 
+        o.ScientificRank, 
+        o.FatherName, 
+        o.Availability, 
+        ts.TimeSlotID, 
+        ts.StartTime, 
+        ts.EndTime, 
+        ts.Day,
+        c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
       LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
       LEFT JOIN Course c ON o.CourseID = c.CourseID
       ORDER BY o.ObserverID, ts.Day
     `);
-    res.status(200).json(result.rows);
+
+    // Group timeslots by observer
+    const observers = result.rows.reduce((acc, row) => {
+      const observerId = row.observerid;
+      if (!acc[observerId]) {
+        acc[observerId] = {
+          observerID: row.observerid,
+          name: row.name,
+          email: row.email,
+          title: row.observertitle,
+          scientificRank: row.scientificrank,
+          fatherName: row.fathername,
+          availability: row.availability,
+          courseName: row.coursename,
+          timeslots: [],
+        };
+      }
+
+      // Add timeslot data if it exists
+      if (row.timeslotid) {
+        acc[observerId].timeslots.push({
+          timeSlotID: row.timeslotid,
+          startTime: row.starttime,
+          endTime: row.endtime,
+          day: row.day,
+        });
+      }
+
+      return acc;
+    }, {});
+
+    // Convert the grouped data into an array
+    const response = Object.values(observers);
+
+    res.status(200).json(response);
   } catch (err) {
     console.error('Error retrieving observers:', err);
     res.status(500).json({ message: 'Error retrieving observers' });
@@ -197,7 +243,19 @@ const getObserverById = async (req, res) => {
 
   try {
     const result = await client.query(`
-      SELECT o.ObserverID, ui.Name, ui.Email, o.Title AS ObserverName, o.ScientificRank, o.FatherName, o.Availability, ts.StartTime, ts.EndTime, ts.Day, c.CourseName
+      SELECT 
+        o.ObserverID, 
+        ui.Name, 
+        ui.Email, 
+        o.Title AS ObserverTitle, 
+        o.ScientificRank, 
+        o.FatherName, 
+        o.Availability, 
+        ts.TimeSlotID, 
+        ts.StartTime, 
+        ts.EndTime, 
+        ts.Day,
+        c.CourseName
       FROM Observer o
       LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
       LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
@@ -210,7 +268,27 @@ const getObserverById = async (req, res) => {
       return res.status(404).json({ message: 'Observer not found' });
     }
 
-    res.status(200).json(result.rows);
+    // Group timeslots by observer
+    const observer = {
+      observerID: result.rows[0].observerid,
+      name: result.rows[0].name,
+      email: result.rows[0].email,
+      title: result.rows[0].observertitle,
+      scientificRank: result.rows[0].scientificrank,
+      fatherName: result.rows[0].fathername,
+      availability: result.rows[0].availability,
+      courseName: result.rows[0].coursename,
+      timeslots: result.rows
+        .filter(row => row.timeslotid) // Filter out rows without timeslots
+        .map(row => ({
+          timeSlotID: row.timeslotid,
+          startTime: row.starttime,
+          endTime: row.endtime,
+          day: row.day,
+        })),
+    };
+
+    res.status(200).json(observer);
   } catch (err) {
     console.error('Error retrieving observer:', err);
     res.status(500).json({ message: 'Error retrieving observer' });
