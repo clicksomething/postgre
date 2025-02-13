@@ -13,13 +13,13 @@ function excelDateToJSDate(serial) {
 }
 
 const createExam = async (req, res) => {
-    const { courseId, roomId, examName, examType, examDate, duration } = req.body;
+    const { courseId, roomId, examName, examDate, startTime, endTime, numOfStudents } = req.body;
 
     try {
         const result = await client.query(
-            `INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, ExamDate, Duration) 
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [courseId, roomId, examName, examType, examDate, duration]
+            `INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, ExamDate) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [courseId, roomId, examName, startTime, endTime, numOfStudents, examDate]
         );
 
         res.status(201).json({ message: "Exam created successfully", exam: result.rows[0] });
@@ -58,7 +58,7 @@ const getExamById = async (req, res) => {
 
 const updateExam = async (req, res) => {
     const { id } = req.params;
-    const { courseId, roomId, examName, examType, examDate, duration } = req.body;
+    const { courseId, roomId, examName, examDate, startTime, endTime, numOfStudents } = req.body;
 
     // Start building the query
     let query = `UPDATE ExamSchedule SET `;
@@ -82,19 +82,19 @@ const updateExam = async (req, res) => {
         values.push(examName);
         fieldsProvided = true;
     }
-    if (examType) {
-        query += `ExamType = $${index++}, `;
-        values.push(examType);
+    if (startTime) {
+        query += `StartTime = $${index++}, `;
+        values.push(startTime);
         fieldsProvided = true;
     }
-    if (examDate) {
-        query += `ExamDate = $${index++}, `;
-        values.push(examDate);
+    if (endTime) {
+        query += `EndTime = $${index++}, `;
+        values.push(endTime);
         fieldsProvided = true;
     }
-    if (duration) {
-        query += `Duration = $${index++}, `;
-        values.push(duration);
+    if (numOfStudents) {
+        query += `NumOfStudents = $${index++}, `;
+        values.push(numOfStudents);
         fieldsProvided = true;
     }
 
@@ -150,15 +150,15 @@ const uploadExamSchedule = async (req, res) => {
         const sheetData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
         for (const row of sheetData) {
-            const { CourseID, RoomID, ExamName, ExamType, ExamDate, Duration } = row;
+            const { CourseID, RoomID, ExamName, ExamDate, StartTime, EndTime, NumOfStudents } = row;
 
             // Convert Excel date to JS Date and format for PostgreSQL
             const formattedExamDate = ExamDate ? excelDateToJSDate(ExamDate).toISOString().split('T')[0] : null;
 
             await client.query(
-                `INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, ExamDate, Duration) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [CourseID, RoomID, ExamName, ExamType, formattedExamDate, Duration]
+                `INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, ExamDate) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, formattedExamDate]
             );
         }
 

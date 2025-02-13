@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom'; // Import Link for navigation
 import axios from 'axios';
 import './ViewObservers.css';
 import Navbar from './Navbar'; // Import the Navbar component
@@ -8,10 +9,13 @@ const ViewObservers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  console.log("Fetching observers..."); // Log to console for debugging
+
   useEffect(() => {
     const fetchObservers = async () => {
       try {
-        const response = await axios.get('http://localhost:3000/api/observers');
+        const response = await axios.get('http://localhost:3000/api/observers'); // Fetching observers data
+        console.log("Response data:", response.data); // Log the response data for debugging
         setObservers(response.data);
       } catch (err) {
         console.error("Error fetching observers:", err);
@@ -32,11 +36,11 @@ const ViewObservers = () => {
     window.location.href = '/login'; // Redirect to login
   };
 
-  return (
-    <div className="view-observers-container">
-      <Navbar onLogout={handleLogout} /> {/* Include the Navbar here */}
+  return (  
+    <div>
       <h1>Observers Information</h1>
-      <table className="observers-table">
+      <Link to="/view-exam-schedule">View Exam Schedule</Link> {/* Navigation link to View Exam Schedule */}
+      <table>
         <thead>
           <tr>
             <th>Name</th>

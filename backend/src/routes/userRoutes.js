@@ -12,7 +12,7 @@ router.delete('/users/:id', userObserverController.deleteUser);   // Delete a us
 
 router.post('/login', authController.login); // Add login route
 
-// Observer Routes
+router.post('/add-time-slot', userObserverController.addTimeSlot); // Route to add a new time slot for an observer
 router.post('/observers', userObserverController.createObserver); // Create a new observer
 router.get('/observers', userObserverController.getObservers);    // Get all observers
 router.get('/observers/:id', userObserverController.getObserverById); // Get an observer by ID
