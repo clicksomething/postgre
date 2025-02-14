@@ -4,9 +4,11 @@ import SuccessMessage from './SuccessMessage'; // Import the SuccessMessage comp
 
 const EditUsers = () => {
   const [users, setUsers] = useState([]); // State to hold users
+  const [filteredUsers, setFilteredUsers] = useState([]); // State to hold filtered users
   const [loading, setLoading] = useState(true); // State to manage loading status
   const [editingUser, setEditingUser] = useState(null); // State to manage the user being edited
   const [successMessages, setSuccessMessages] = useState([]); // State for success messages
+  const [searchTerm, setSearchTerm] = useState(''); // State for search term
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -15,6 +17,7 @@ const EditUsers = () => {
         const data = await response.json();
         console.log("Fetched users:", data); // Log the fetched users
         setUsers(data);
+        setFilteredUsers(data); // Initialize filteredUsers with all users
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
@@ -24,6 +27,19 @@ const EditUsers = () => {
 
     fetchUsers(); // Call the fetch function
   }, []);
+
+  // Handle search input change
+  const handleSearch = (e) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+
+    // Filter users based on the search term (name or email)
+    const filtered = users.filter(user =>
+      user.name.toLowerCase().includes(term.toLowerCase()) ||
+      user.email.toLowerCase().includes(term.toLowerCase())
+    );
+    setFilteredUsers(filtered);
+  };
 
   const handleEditClick = (user) => {
     setEditingUser(user); // Set the user to be edited
@@ -65,6 +81,7 @@ const EditUsers = () => {
       const updatedUsersResponse = await fetch("http://localhost:3000/api/users");
       const updatedUsersData = await updatedUsersResponse.json();
       setUsers(updatedUsersData); // Update the users state with the new list
+      setFilteredUsers(updatedUsersData); // Update the filtered users
 
       // Reset editing user after saving
       setEditingUser(null);
@@ -105,6 +122,7 @@ const EditUsers = () => {
       const updatedUsersResponse = await fetch("http://localhost:3000/api/users");
       const updatedUsersData = await updatedUsersResponse.json();
       setUsers(updatedUsersData); // Update the users state with the new list
+      setFilteredUsers(updatedUsersData); // Update the filtered users
 
       // Set a timeout to remove the message after 3 seconds
       setTimeout(() => {
@@ -126,21 +144,35 @@ const EditUsers = () => {
   return (
     <div className="edit-users-container">
       <h2>Edit Users</h2>
+
+      {/* Search Bar */}
+      <div className="search-bar">
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={searchTerm}
+          onChange={handleSearch}
+        />
+      </div>
+
+      {/* Users Table */}
       <table className="users-table">
         <thead>
           <tr>
             <th>Name</th>
             <th>Email</th>
             <th>Phone Number</th>
+            <th>Role</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {users.map((user) => (
+          {filteredUsers.map((user) => (
             <tr key={user.id}> {/* Use user.id as the key */}
               <td>{user.name}</td> {/* Use user.name */}
               <td>{user.email}</td> {/* Use user.email */}
               <td>{user.phonenum}</td> {/* Use user.phonenum */}
+              <td>{user.role}</td> {/* Use user.role */}
               <td>
                 <button className="edit-button" onClick={() => handleEditClick(user)}>
                   <i className="fas fa-pencil-alt"></i> Edit
@@ -183,6 +215,17 @@ const EditUsers = () => {
               value={editingUser.phonenum}
               onChange={handleInputChange}
             />
+          </label>
+          <label>
+            Role:
+            <select
+              name="role"
+              value={editingUser.role}
+              onChange={handleInputChange}
+            >
+              <option value="normal_user">Normal User</option>
+              <option value="admin">Admin</option>
+            </select>
           </label>
           <label>
             Password:
