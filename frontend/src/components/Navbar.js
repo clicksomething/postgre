@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import './Navbars.scss'; // Import the CSS file for styling
+import './Navbars.scss'; // Import the SCSS file for styling
 
 const Navbar = ({ onLogout }) => {
   return (
@@ -9,13 +9,13 @@ const Navbar = ({ onLogout }) => {
         <h1 className="navbar-title">Admin Dashboard</h1>
         <ul className="nav-links">
           <li>
-            <Link to="/edit-users" className="nav-link">
-              <i className="fas fa-user-edit"></i> Edit Users
+            <Link to="/manage-users" className="nav-link">
+              <i className="fas fa-users-cog"></i> Manage Users
             </Link>
           </li>
           <li>
-            <Link to="/view-observers" className="nav-link">
-              <i className="fas fa-eye"></i> View Observers
+            <Link to="/manage-observers" className="nav-link">
+              <i className="fas fa-user-tie"></i> Manage Observers
             </Link>
           </li>
           <li>

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import './EditUsers.scss';
+import './ManageUsers.scss';
 import SuccessMessage from './SuccessMessage';
 
-const EditUsers = () => {
+const ManageUsers = () => {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -277,4 +277,4 @@ const EditUsers = () => {
   );
 };
 
-export default EditUsers;
+export default ManageUsers;

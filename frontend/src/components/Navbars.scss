@@ -53,11 +53,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem; /* Space between icon and text */
-}
 
-.nav-link:hover {
-    background-color: #4c51bf; /* Purple background on hover */
-    color: #ffffff; /* White text on hover */
+    &:hover {
+        background-color: #4c51bf; /* Purple background on hover */
+        color: #ffffff; /* White text on hover */
+    }
 }
 
 /* Logout Button */
@@ -72,9 +72,9 @@
     display: flex;
     align-items: center;
     gap: 0.5rem; /* Space between icon and text */
-}
 
-.logout-button:hover {
-    background-color: #e53e3e; /* Red background on hover */
-    color: #ffffff; /* White text on hover */
+    &:hover {
+        background-color: #e53e3e; /* Red background on hover */
+        color: #ffffff; /* White text on hover */
+    }
 }
