@@ -141,25 +141,32 @@ const addTimeSlot = async (req, res) => {
 };
 
 // Get all users (with userInfo)
+
 const getUsers = async (req, res) => {
   try {
-    const result = await client.query(` 
+    const result = await client.query(`
       SELECT ui.ID, ui.Name, ui.Email, ui.PhoneNum, MIN(u.RoleID) AS RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
       GROUP BY ui.ID, ui.Name, ui.Email, ui.PhoneNum
     `);
 
-    res.status(200).json(result.rows.map(user => ({
-      ...user,
-      isAdmin: user.roleid === 2 // Indicate if the user is an admin based on RoleID
-    })));
+    res.status(200).json(result.rows.map(user => {
+      const role = user.roleid === 2 ? 'admin' : 'normal_user'; // Determine role
+
+      return {
+        ...user,
+        role: role, // Add the role property to the user object
+        isAdmin: user.roleid === 2 // Indicate if the user is an admin based on RoleID
+      };
+    }));
 
   } catch (err) {
     console.error('Error retrieving users:', err);
     res.status(500).json({ message: 'Error retrieving users' });
   }
 };
+
 
 // Get all observers (with userInfo and timeSlot info)
 const getObservers = async (req, res) => {
