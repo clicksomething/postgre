@@ -1,4 +1,8 @@
-/* Navbar.css */
+/* Navbar.scss */
+
+:root {
+    --navbar-height: 80px; /* Store the navbar height as a CSS variable */
+}
 
 .navbar {
     width: 100%;
@@ -8,8 +12,9 @@
     top: 0;
     left: 0;
     z-index: 1000; /* Ensure the navbar stays above other content */
-    height: 80px; /* Set a height for the navbar */
-  }
+    height: var(--navbar-height); /* Use the CSS variable */
+}
+
 .navbar-content {
     display: flex;
     justify-content: space-between;
@@ -48,11 +53,11 @@
     display: flex;
     align-items: center;
     gap: 0.5rem; /* Space between icon and text */
-}
 
-.nav-link:hover {
-    background-color: #4c51bf; /* Purple background on hover */
-    color: #ffffff; /* White text on hover */
+    &:hover {
+        background-color: #4c51bf; /* Purple background on hover */
+        color: #ffffff; /* White text on hover */
+    }
 }
 
 /* Logout Button */
@@ -67,9 +72,9 @@
     display: flex;
     align-items: center;
     gap: 0.5rem; /* Space between icon and text */
-}
 
-.logout-button:hover {
-    background-color: #e53e3e; /* Red background on hover */
-    color: #ffffff; /* White text on hover */
+    &:hover {
+        background-color: #e53e3e; /* Red background on hover */
+        color: #ffffff; /* White text on hover */
+    }
 }

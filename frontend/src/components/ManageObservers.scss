@@ -1,0 +1,169 @@
+/* ManageObservers.scss */
+
+/* Main container styles */
+.view-observers-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  padding-top: 80px; /* Adjust this value based on your navbar height */
+  background-color: #f8f9fa; /* Light gray background */
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  overflow-y: auto; /* Allow vertical scrolling */
+  height: calc(100vh - 80px); /* Set height to fill the viewport minus navbar height */
+}
+
+/* Search bar styles */
+.search-bar {
+  margin-bottom: 1.5rem; /* Space below the search bar */
+
+  input {
+    width: 100%; /* Full width */
+    padding: 0.75rem; /* Padding for input */
+    border: 1px solid #ced4da; /* Light gray border */
+    border-radius: 4px; /* Rounded corners */
+    font-size: 1rem; /* Font size */
+    color: #4a5568; /* Medium gray text */
+    box-sizing: border-box; /* Ensure padding is included in the width */
+
+    &:focus {
+      border-color: #4c51bf; /* Purple border on focus */
+      outline: none; /* Remove default outline */
+      box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.1); /* Subtle focus shadow */
+    }
+  }
+}
+
+/* Styles for the Add Observer button */
+.add-observer-button {
+  background-color: #28a745; /* Green background */
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s ease;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    background-color: #218838; /* Darker green on hover */
+  }
+
+  i {
+    margin-right: 0.5rem; /* Add space between the icon and text */
+  }
+}
+
+/* Observers table styles */
+.observers-table {
+  width: 100%;
+  border-collapse: collapse; /* Collapse borders */
+  margin-bottom: 2rem; /* Space below the table */
+
+  th,
+  td {
+    border: 1px solid #dee2e6; /* Light gray border */
+    padding: 0.75rem; /* Padding for table cells */
+    text-align: left; /* Align text to the left */
+  }
+
+  th {
+    background-color: #007bff; /* Blue background for header */
+    color: white; /* White text for header */
+    font-weight: bold; /* Bold text for header */
+  }
+
+  tr:hover {
+    background-color: #f1f1f1; /* Light gray background on row hover */
+  }
+
+  /* Center-align timeslot columns */
+  td:nth-child(n + 6) {
+    text-align: center;
+  }
+}
+
+/* Edit Observer Modal Styles */
+.edit-observer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top */
+}
+
+.modal-content {
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+  width: 80%;
+  max-width: 600px;
+  position: relative; /* For positioning the close button */
+}
+
+.close-button {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #4a5568; /* Medium gray */
+
+  &:hover {
+    color: #007bff; /* Blue on hover */
+  }
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    color: #4a5568; /* Medium gray */
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ced4da; /* Light gray border */
+    border-radius: 4px;
+    font-size: 1rem;
+    color: #4a5568; /* Medium gray */
+    box-sizing: border-box; /* Ensure padding is included in the width */
+
+    &:focus {
+      border-color: #4c51bf; /* Purple border on focus */
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(76, 81, 191, 0.1); /* Subtle focus shadow */
+    }
+  }
+}
+
+.save-button {
+  background-color: #28a745; /* Green background */
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: #218838; /* Darker green on hover */
+  }
+}
