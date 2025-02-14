@@ -85,7 +85,6 @@ const ViewObservers = () => {
             <th>Scientific Rank</th>
             <th>Father Name</th>
             <th>Availability</th>
-            <th>Course Name</th>
             <th>Monday</th>
             <th>Tuesday</th>
             <th>Wednesday</th>
@@ -102,7 +101,6 @@ const ViewObservers = () => {
               <td>{observer.scientificRank}</td>
               <td>{observer.fatherName}</td>
               <td>{observer.availability}</td>
-              <td>{observer.courseName}</td>
               <td>{getTimeslotsForDay(observer.timeslots, 'Monday')}</td>
               <td>{getTimeslotsForDay(observer.timeslots, 'Tuesday')}</td>
               <td>{getTimeslotsForDay(observer.timeslots, 'Wednesday')}</td>
