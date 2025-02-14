@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './ManageObservers.scss';
-import EditObserverModal from './EditObserverModal'; // Import the EditObserverModal component
+import EditObserverModal from './EditObserverModal';
 import CreateObserverModal from './CreateObserverModal';
-import Navbar from './Navbar'; // Import the Navbar component
+import Navbar from './Navbar';
 
 const ManageObservers = () => {
     const [observers, setObservers] = useState([]);
@@ -12,7 +12,7 @@ const ManageObservers = () => {
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingObserver, setEditingObserver] = useState(null);
-    const [isCreatingObserver, setIsCreatingObserver] = useState(false); // State to control create modal
+    const [isCreatingObserver, setIsCreatingObserver] = useState(false);
 
     useEffect(() => {
         const fetchObservers = async () => {
@@ -31,7 +31,6 @@ const ManageObservers = () => {
         fetchObservers();
     }, []);
 
-    // Handle search input change
     const handleSearch = (e) => {
         const term = e.target.value;
         setSearchTerm(term);
@@ -42,23 +41,17 @@ const ManageObservers = () => {
         setFilteredObservers(filtered);
     };
 
-    // Handle edit button click
     const handleEditClick = (observer) => {
         setEditingObserver(observer);
     };
 
-    // Handle closing the edit modal
     const handleCloseEditModal = () => {
         setEditingObserver(null);
     };
 
-    // Handle saving the edited observer data
     const handleSaveObserver = async (updatedObserver) => {
         try {
-            // Send the updated data to the server
             await axios.put(`http://localhost:3000/api/observers/${updatedObserver.observerID}`, updatedObserver);
-
-            // Update the observers list with the new data
             setObservers(prevObservers =>
                 prevObservers.map(observer =>
                     observer.observerID === updatedObserver.observerID ? updatedObserver : observer
@@ -75,28 +68,21 @@ const ManageObservers = () => {
             console.error("Error updating observer:", err);
             setError(err.message);
         } finally {
-            // Close the edit modal
             handleCloseEditModal();
         }
     };
 
-    // Handle add observer button click
     const handleAddObserverClick = () => {
         setIsCreatingObserver(true);
     };
 
-    // Handle closing the create modal
     const handleCloseCreateModal = () => {
         setIsCreatingObserver(false);
     };
 
-    // Handle creating a new observer
     const handleCreateObserver = async (newObserver) => {
         try {
-            // Send the new data to the server
             const response = await axios.post('http://localhost:3000/api/observers', newObserver);
-
-            // Add the new observer to the observers list
             setObservers(prevObservers => [...prevObservers, response.data]);
             setFilteredObservers(prevFilteredObservers => [...prevFilteredObservers, response.data]);
 
@@ -105,12 +91,10 @@ const ManageObservers = () => {
             console.error("Error creating observer:", err);
             setError(err.message);
         } finally {
-            // Close the create modal
             handleCloseCreateModal();
         }
     };
 
-    // Helper function to format timeslots for a specific day
     const getTimeslotsForDay = (timeslots, day) => {
         const dayTimeslots = timeslots.filter(ts => ts.day === day);
         if (dayTimeslots.length === 0) return '-';
@@ -128,8 +112,8 @@ const ManageObservers = () => {
     if (error) return <div>Error: {error}</div>;
 
     const handleLogout = () => {
-        localStorage.removeItem('authToken'); // Remove token on logout
-        window.location.href = '/login'; // Redirect to login
+        localStorage.removeItem('authToken');
+        window.location.href = '/login';
     };
 
     return (
@@ -137,7 +121,6 @@ const ManageObservers = () => {
             <Navbar onLogout={handleLogout} />
             <h1>Observers Information</h1>
 
-            {/* Search Bar */}
             <div className="search-bar">
                 <input
                     type="text"
@@ -147,12 +130,10 @@ const ManageObservers = () => {
                 />
             </div>
 
-            {/* Add Observer Button */}
             <button className="add-observer-button" onClick={handleAddObserverClick}>
                 <i className="fas fa-plus"></i> Add Observer
             </button>
 
-            {/* Observers Table */}
             <table className="observers-table">
                 <thead>
                     <tr>
@@ -167,7 +148,7 @@ const ManageObservers = () => {
                         <th>Friday</th>
                         <th>Saturday</th>
                         <th>Sunday</th>
-                        <th>Actions</th> {/* Add actions column */}
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -185,14 +166,15 @@ const ManageObservers = () => {
                             <td>{getTimeslotsForDay(observer.timeslots, 'Saturday')}</td>
                             <td>{getTimeslotsForDay(observer.timeslots, 'Sunday')}</td>
                             <td>
-                                <button onClick={() => handleEditClick(observer)}>Edit</button> {/* Add edit button */}
+                                <button className="edit-button" onClick={() => handleEditClick(observer)}>
+                                    <i className="fas fa-edit"></i> Edit
+                                </button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
 
-            {/* Conditionally render the EditObserverModal */}
             {editingObserver && (
                 <EditObserverModal
                     observer={editingObserver}
@@ -201,7 +183,6 @@ const ManageObservers = () => {
                 />
             )}
 
-            {/* Conditionally render the CreateObserverModal */}
             {isCreatingObserver && (
                 <CreateObserverModal
                     onClose={handleCloseCreateModal}

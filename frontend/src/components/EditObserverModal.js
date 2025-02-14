@@ -98,21 +98,11 @@ const EditObserverModal = ({ observer, onClose, onSave }) => {
                             name="availability"
                             defaultValue={observer.availability}
                         >
-                            <option value="Available">Available</option>
-                            <option value="Unavailable">Unavailable</option>
+                            <option value="full-time">Full time</option>
+                            <option value="part-time">Part time</option>
                         </select>
                     </div>
 
-                    {/* Course ID */}
-                    <div className="form-group">
-                        <label htmlFor="courseID">Course ID:</label>
-                        <input
-                            type="number"
-                            id="courseID"
-                            name="courseID"
-                            defaultValue={observer.courseID}
-                        />
-                    </div>
                     {/* Submit Button */}
                     <button type="submit" className="save-button">
                         Save

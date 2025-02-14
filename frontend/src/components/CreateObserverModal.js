@@ -129,8 +129,8 @@ const CreateObserverModal = ({ onClose, onCreate }) => {
               id="availability"
               name="availability"
             >
-              <option value="Available">Available</option>
-              <option value="Unavailable">Unavailable</option>
+              <option value="full-time">Full time</option>
+              <option value="part-time">Part time</option>
             </select>
           </div>
 
