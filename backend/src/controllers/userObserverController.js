@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 
 // Create a new user
 const createUser = async (req, res) => {
-  const { name, email, phoneNum, password, role } = req.body; // Include role
+  const { name, email, phonenum, password, role } = req.body; // Include role
 
   // Validate role
   if (!['normal_user', 'admin', 'observer'].includes(role)) {
@@ -23,7 +23,7 @@ const createUser = async (req, res) => {
   }
 
   // Check if phone number is provided
-  if (!phoneNum) {
+  if (!phonenum) {
     return res.status(400).json({ message: 'Phone number is required' });
   }
 
@@ -55,7 +55,7 @@ const createUser = async (req, res) => {
     const userInfoResult = await client.query(
       `INSERT INTO UserInfo (Name, Email, PhoneNum, Password) 
        VALUES ($1, $2, $3, $4) RETURNING ID`,
-      [name, email, phoneNum, hashedPassword]
+      [name, email, phonenum, hashedPassword]
     );
 
     const userInfoId = userInfoResult.rows[0].id;
@@ -76,7 +76,7 @@ const createUser = async (req, res) => {
 
 // Create a new observer
 const createObserver = async (req, res) => {
-  const { title, scientificRank, fatherName, availability, email, password, name, phoneNum } = req.body; // Include title
+  const { title, scientificRank, fatherName, availability, email, password, name, phonenum } = req.body; // Include title
 
   // Check if email is provided
   if (!email) {
@@ -89,7 +89,7 @@ const createObserver = async (req, res) => {
   }
 
   // Check if phone number is provided
-  if (!phoneNum) {
+  if (!phonenum) {
     return res.status(400).json({ message: 'Phone number is required' });
   }
 
@@ -106,7 +106,7 @@ const createObserver = async (req, res) => {
     const result = await client.query(
       `INSERT INTO Observer (Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ObserverID`,
-      [email, hashedPassword, name, phoneNum, title, scientificRank, fatherName, availability]
+      [email, hashedPassword, name, phonenum, title, scientificRank, fatherName, availability]
     );
 
     res.status(201).json({ message: 'Observer created successfully', observerID: result.rows[0].ObserverID });
@@ -315,61 +315,76 @@ const getObserverById = async (req, res) => {
 
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phonenum, password } = req.body; // Use "phonenum" instead of "phoneNum"
+  const { name, email, phonenum, password, role } = req.body;
 
-  // Start building the query
-  let query = `UPDATE "userinfo" SET `;
+  let query = `UPDATE userinfo SET `;
 
   const values = [];
   let index = 1;
   let fieldsProvided = false;
 
-  // Check which fields are provided and build the query
   if (name) {
-    query += `Name = $${index++}, `;
-    values.push(name);
-    fieldsProvided = true;
+      query += `Name = $${index++}, `;
+      values.push(name);
+      fieldsProvided = true;
   }
   if (email) {
-    query += `Email = $${index++}, `;
-    values.push(email);
-    fieldsProvided = true;
+      query += `Email = $${index++}, `;
+      values.push(email);
+      fieldsProvided = true;
   }
-  if (phonenum) { // Use "phonenum" instead of "phoneNum"
-    query += `PhoneNum = $${index++}, `; // Keep "PhoneNum" in the query (database column name)
-    values.push(phonenum);
-    fieldsProvided = true;
+  if (phonenum) {
+      query += `PhoneNum = $${index++}, `;
+      values.push(phonenum);
+      fieldsProvided = true;
   }
   if (password) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    query += `Password = $${index++}, `;
-    values.push(hashedPassword);
-    fieldsProvided = true;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      query += `Password = $${index++}, `;
+      values.push(hashedPassword);
+      fieldsProvided = true;
   }
 
-  // If no fields were provided, return an error
   if (!fieldsProvided) {
-    return res.status(400).json({ message: "No fields provided for update" });
+      return res.status(400).json({ message: "No fields provided for update" });
   }
 
-  // Remove the last comma and space
+  // Remove the trailing comma and space
   query = query.slice(0, -2);
-  query += ` WHERE ID = $${index} RETURNING ID`;
+
+  query += ` WHERE ID = $${index}`;
   values.push(id);
 
   try {
-    const result = await client.query(query, values);
+      const result = await client.query(query, values);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+      if (result.rowCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+      }
 
-    res.status(200).json({ message: 'User updated successfully' });
+      // Update the role in AppUser table, ensuring it's a user
+      const roleId = role === 'admin' ? 2 : 1; // Convert role to RoleID
+      const updateUserQuery = `
+          UPDATE AppUser
+          SET RoleID = $1
+          WHERE U_ID = $2
+          AND UserID = (
+              SELECT UserID
+              FROM AppUser
+              WHERE U_ID = $2
+              ORDER BY UserID ASC
+              LIMIT 1
+          )
+      `;
+      await client.query(updateUserQuery, [roleId, id]);
+
+      res.status(200).json({ message: "User updated successfully" });
   } catch (err) {
-    console.error('Error updating user:', err);
-    res.status(500).json({ message: 'Error updating user' });
+      console.error('Error updating user:', err);
+      res.status(500).json({ message: 'Error updating user' });
   }
 };
+
 // Update an observer
 const updateObserver = async (req, res) => {
   const { id } = req.params;

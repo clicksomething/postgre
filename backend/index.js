@@ -6,6 +6,7 @@ app.use(cors()); // Use CORS middleware
 
 const bodyParser = require('body-parser');
 const userRoutes = require('../backend/src/routes/userRoutes.js'); // Importing user routes
+const timeSlotRouter = require('../backend/src/routes/timeSlotRouter.js');
 const authRoutes = require('../backend/src/routes/authRoutes.js');
 const { client } = require('../backend/database/db.js'); // Import the already established DB connection
 const initDB = require('./database/initDB');
@@ -30,7 +31,7 @@ initDB().then(() => {
 
 // Use the routes
 app.use('/api', userRoutes); // Prefixed with /api for user and observer routes
-
+app.use('/api', timeSlotRouter);
 // Basic route to test server
 app.get('/', (req, res) => {
   res.send('Exam Observer API is running!');

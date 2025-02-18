@@ -19,11 +19,6 @@ const Navbar = ({ onLogout }) => {
             </Link>
           </li>
           <li>
-            <Link to="/create-user" className="nav-link">
-              <i className="fas fa-user-plus"></i> Create User
-            </Link>
-          </li>
-          <li>
             <button className="nav-link logout-button" onClick={onLogout}>
               <i className="fas fa-sign-out-alt"></i> Logout
             </button>

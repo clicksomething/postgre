@@ -72,7 +72,6 @@ async function initDB() {
       ScientificRank VARCHAR(255),
       FatherName VARCHAR(255),
       Availability availability_enum NOT NULL,
-      CourseID INT REFERENCES Course(CourseID) ON DELETE SET NULL
     );
     
     CREATE TABLE IF NOT EXISTS TimeSlot (
