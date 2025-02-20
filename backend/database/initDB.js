@@ -38,7 +38,6 @@ async function initDB() {
       SeatingCapacity INT NOT NULL
     );
 
-
     CREATE TABLE IF NOT EXISTS Roles (
       RoleID SERIAL PRIMARY KEY,
       RoleName VARCHAR(255) UNIQUE NOT NULL
@@ -76,8 +75,8 @@ async function initDB() {
     
     CREATE TABLE IF NOT EXISTS TimeSlot (
       TimeSlotID SERIAL PRIMARY KEY,
-      StartTime TIME  NOT NULL,
-      EndTime TIME  NOT NULL,
+      StartTime TIME NOT NULL,
+      EndTime TIME NOT NULL,
       day VARCHAR(10),
       ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
     );
@@ -129,12 +128,33 @@ async function initDB() {
       ExamID SERIAL PRIMARY KEY,
       CourseID INT REFERENCES Course(CourseID) ON DELETE CASCADE,
       RoomID INT REFERENCES Room(RoomID) ON DELETE CASCADE,
-      ExamName VARCHAR(255) NOT NULL,
-      StartTime TIME  NOT NULL,
-      EndTime TIME  NOT NULL,
-      NumOfStudents INT,
-      ExamDate DATE NOT NULL
+      ExamName VARCHAR(255) NOT NULL,      
+      ExamType VARCHAR(50) NOT NULL,       
+      StartTime TIME NOT NULL,
+      EndTime TIME NOT NULL,
+      ExamDate DATE NOT NULL,
+      NumOfStudents INT NOT NULL,
+      ExamHead INT REFERENCES Observer(ObserverID),
+      ExamSecretary INT REFERENCES Observer(ObserverID),
+      Status VARCHAR(50) DEFAULT 'unassigned',
+      CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Timestamp update trigger
+    CREATE OR REPLACE FUNCTION update_timestamp()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.UpdatedAt = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS update_exam_timestamp ON ExamSchedule;
+    CREATE TRIGGER update_exam_timestamp
+    BEFORE UPDATE ON ExamSchedule
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
 
     CREATE TABLE IF NOT EXISTS Preferences (
       PreferenceID SERIAL PRIMARY KEY,
@@ -143,11 +163,28 @@ async function initDB() {
       Description TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS DistributeSchedule (
-      ScheduleID SERIAL PRIMARY KEY,
-      ExamScheduleID INT REFERENCES ExamSchedule(ExamID) ON DELETE CASCADE,
-      ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
+    -- First create the ENUM types
+    CREATE TYPE semester_type AS ENUM ('First', 'Second', 'Summer');
+    CREATE TYPE exam_type AS ENUM ('First', 'Second', 'Practical', 'Final');
+
+    -- Then create the table
+    CREATE TABLE IF NOT EXISTS UploadedSchedules (
+      UploadID SERIAL PRIMARY KEY,
+      AcademicYear VARCHAR(9) NOT NULL,
+      Semester semester_type NOT NULL,
+      ExamType exam_type NOT NULL,
+      FileName VARCHAR(255) NOT NULL,
+      UploadedBy INT REFERENCES AppUser(UserID),
+      UploadedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ProcessedAt TIMESTAMP,
+      Status VARCHAR(50) DEFAULT 'pending',
+      ErrorLog TEXT,
+      UNIQUE(AcademicYear, Semester, ExamType)
     );
+
+    -- Modify ExamSchedule table to include the schedule reference
+    ALTER TABLE ExamSchedule 
+    ADD COLUMN ScheduleID INT REFERENCES UploadedSchedules(UploadID);
   `;
 
   try {
@@ -191,7 +228,12 @@ async function initDB() {
     const userCount = await client.query('SELECT COUNT(*) FROM UserInfo');
     if (parseInt(userCount.rows[0].count) === 0) {
       await client.query(`
-        -- First, insert regular users
+        -- First, insert admin users
+        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
+        ('amer', 'amer@gmail.com', '123456', '123456'),
+        ('majd', 'majd@gmail.com', '123456', '123456');
+
+        -- Then, insert regular users
         INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
         ('Alice Smith', 'alice@example.com', '1234567890', 'password123'),
         ('Bob Johnson', 'bob@example.com', '0987654321', 'password456');
@@ -208,6 +250,14 @@ async function initDB() {
     const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
     if (parseInt(appUserCount.rows[0].count) === 0) {
       await client.query(`
+        -- Insert admin users first
+        INSERT INTO AppUser (U_ID, RoleID)
+        SELECT 
+          ui.ID,
+          (SELECT RoleID FROM Roles WHERE RoleName = 'admin')
+        FROM UserInfo ui
+        WHERE ui.Email IN ('amer@gmail.com', 'majd@gmail.com');
+
         -- Insert regular users with their roles
         INSERT INTO AppUser (U_ID, RoleID)
         SELECT 
@@ -311,14 +361,13 @@ async function initDB() {
       `);
     }
 
-
     // Insert dummy data into ExamSchedule if empty
     const examScheduleCount = await client.query('SELECT COUNT(*) FROM ExamSchedule');
     if (parseInt(examScheduleCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, ExamDate) VALUES
-        (1, 1, 'Midterm Exam',  '09:00:00', ' 11:00:00', 30, '2023-10-15'),
-        (2, 2, 'Final Exam', '10:00:00', ' 13:00:00', 25, '2023-12-10');
+        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, StartTime, EndTime, NumOfStudents, ExamDate, ExamHead, ExamSecretary) VALUES
+        (1, 1, 'Midterm Exam', 'theoretical', '09:00:00', '11:00:00', 30, '2023-10-15', 1, 2),
+        (2, 2, 'Final Exam', 'practical', '10:00:00', '13:00:00', 25, '2023-12-10', 2, 3);
       `);
     }
 
@@ -329,16 +378,6 @@ async function initDB() {
         INSERT INTO Preferences (ExamScheduleID, ObserverID, Description) VALUES
         (1, 1, 'Preferred time slot for the exam.'),
         (2, 2, 'Needs additional resources for preparation.');
-      `);
-    }
-
-    // Insert dummy data into DistributeSchedule if empty
-    const distributeScheduleCount = await client.query('SELECT COUNT(*) FROM DistributeSchedule');
-    if (parseInt(distributeScheduleCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO DistributeSchedule (ExamScheduleID, ObserverID) VALUES
-        (1, 1),
-        (2, 2);
       `);
     }
 

@@ -22,8 +22,10 @@ const Dashboard = () => {
     <div className="dashboard-container">
       <Navbar onLogout={handleLogout} /> {/* Use the Navbar component */}
       <div className="dashboard-content">
-        <h2>Welcome to the Admin Dashboard</h2>
-        {/* Additional dashboard content goes here */}
+        <div className="welcome-message">
+          <h2>Welcome to the Admin Dashboard</h2>
+          <p>Manage your exam schedules and observers efficiently</p>
+        </div>
       </div>
     </div>
   );

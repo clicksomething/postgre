@@ -86,6 +86,9 @@ const CreateObserverModal = ({ onClose, onCreate }) => {
               id="phonenum"
               name="phonenum"
               required
+              pattern="[0-9]{10}"
+              placeholder="Enter 10-digit phone number"
+              className="form-control"
             />
           </div>
 

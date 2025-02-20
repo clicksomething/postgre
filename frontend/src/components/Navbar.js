@@ -19,6 +19,11 @@ const Navbar = ({ onLogout }) => {
             </Link>
           </li>
           <li>
+            <Link to="/manage-exams" className="nav-link">
+              <i className="fas fa-calendar-alt"></i> Manage Exams
+            </Link>
+          </li>
+          <li>
             <button className="nav-link logout-button" onClick={onLogout}>
               <i className="fas fa-sign-out-alt"></i> Logout
             </button>
