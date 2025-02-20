@@ -1,0 +1,130 @@
+.view-schedules {
+    .search-bar {
+        position: relative;
+        margin-bottom: 30px;
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+
+            &:focus {
+                border-color: #80bdff;
+                outline: none;
+                box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            }
+        }
+    }
+
+    .schedule-table-container {
+        overflow-x: auto;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .schedule-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 2rem;
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #4a5568;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        tr {
+            &:hover {
+                background-color: #f8f9fa;
+            }
+        }
+
+        td {
+            color: #2d3748;
+            
+            button {
+                padding: 0.5rem 1rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 0.875rem;
+                margin-right: 0.5rem;
+                transition: all 0.2s ease;
+
+                svg {
+                    font-size: 0.875rem;
+                }
+
+                &.view-button {
+                    background-color: #4c51bf;
+                    color: white;
+
+                    &:hover {
+                        background-color: #434190;
+                        transform: translateY(-1px);
+                    }
+                }
+
+                &.delete-button {
+                    background-color: #e53e3e;
+                    color: white;
+
+                    &:hover {
+                        background-color: #c53030;
+                        transform: translateY(-1px);
+                    }
+                }
+            }
+        }
+    }
+
+    .loading-spinner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        color: #4c51bf;
+
+        .spinner-icon {
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    }
+
+    .error-message {
+        text-align: center;
+        color: #e53e3e;
+        padding: 2rem;
+        background-color: #fff5f5;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+} 

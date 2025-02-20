@@ -1,0 +1,67 @@
+.manage-exams-container {
+    padding: 20px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    max-width: 1200px;
+    margin: 0 auto;
+    margin-top: var(--navbar-height); // Account for main navbar
+
+    h1 {
+        color: #343a40;
+        margin-bottom: 25px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 2rem;
+    }
+
+    .exam-actions {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+        .action-button {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            background-color: #f8f9fa;
+            color: #495057;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+
+            svg {
+                font-size: 1.1rem;
+            }
+
+            &:hover {
+                background-color: #e9ecef;
+                transform: translateY(-1px);
+            }
+
+            &.active {
+                background-color: #4c51bf;
+                color: white;
+
+                &:hover {
+                    background-color: #434190;
+                }
+            }
+        }
+    }
+
+    .exam-content {
+        background-color: #fff;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+} 

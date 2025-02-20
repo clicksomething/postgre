@@ -5,11 +5,11 @@ const jwt = require('jsonwebtoken');
 
 // Create a new user
 const createUser = async (req, res) => {
-  const { name, email, phoneNum, password, role } = req.body; // Include role
+  const { name, email, phonenum, password, role } = req.body;
 
-  // Validate role
-  if (!['normal_user', 'admin', 'observer'].includes(role)) {
-      return res.status(400).json({ message: 'Invalid role' });
+  // Validate role - only allow internal user roles
+  if (!['normal_user', 'admin'].includes(role)) {
+    return res.status(400).json({ message: 'Invalid role. Must be normal_user or admin' });
   }
 
   // Check if name is provided
@@ -23,7 +23,7 @@ const createUser = async (req, res) => {
   }
 
   // Check if phone number is provided
-  if (!phoneNum) {
+  if (!phonenum) {
     return res.status(400).json({ message: 'Phone number is required' });
   }
 
@@ -33,16 +33,15 @@ const createUser = async (req, res) => {
   }
 
   try {
-    // Check if email already exists
+    // Check if email already exists in ANY user table
     const existingUser = await client.query(
-      `SELECT * FROM UserInfo WHERE Email = $1`,
+      `SELECT ui.Email 
+       FROM UserInfo ui
+       JOIN AppUser au ON ui.ID = au.U_ID
+       JOIN Roles r ON au.RoleID = r.RoleID
+       WHERE ui.Email = $1`,
       [email]
     );
-
-    // Validate role
-    if (!['normal_user', 'admin', 'observer'].includes(role)) {
-      return res.status(400).json({ message: 'Invalid role' });
-    }
 
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ message: 'Email already in use' });
@@ -55,7 +54,7 @@ const createUser = async (req, res) => {
     const userInfoResult = await client.query(
       `INSERT INTO UserInfo (Name, Email, PhoneNum, Password) 
        VALUES ($1, $2, $3, $4) RETURNING ID`,
-      [name, email, phoneNum, hashedPassword]
+      [name, email, phonenum, hashedPassword]
     );
 
     const userInfoId = userInfoResult.rows[0].id;
@@ -76,43 +75,66 @@ const createUser = async (req, res) => {
 
 // Create a new observer
 const createObserver = async (req, res) => {
-  const { title, scientificRank, fatherName, availability, email, password, name, phoneNum } = req.body; // Include title
-
-  // Check if email is provided
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required' });
-  }
-
-  // Check if name is provided
-  if (!name) {
-    return res.status(400).json({ message: 'Name is required' });
-  }
-
-  // Check if phone number is provided
-  if (!phoneNum) {
-    return res.status(400).json({ message: 'Phone number is required' });
-  }
-
-  // Check if password is provided
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required' });
-  }
+  const { title, scientificRank, fatherName, availability, email, password, name, phonenum } = req.body;
 
   try {
+    // Start a transaction
+    await client.query('BEGIN');
+
+    // Check if email already exists in UserInfo
+    const existingUser = await client.query(
+      'SELECT * FROM UserInfo WHERE Email = $1',
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Email already exists' });
+    }
+
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert observer data into Observer
-    const result = await client.query(
-      `INSERT INTO Observer (Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ObserverID`,
-      [email, hashedPassword, name, phoneNum, title, scientificRank, fatherName, availability]
+    // First, create the user in UserInfo
+    const userInfoResult = await client.query(
+      `INSERT INTO UserInfo (Name, Email, PhoneNum, Password)
+       VALUES ($1, $2, $3, $4) RETURNING ID`,
+      [name, email, phonenum, hashedPassword]
     );
 
-    res.status(201).json({ message: 'Observer created successfully', observerID: result.rows[0].ObserverID });
+    const userInfoId = userInfoResult.rows[0].id;
+
+    // Then create the AppUser with observer role only
+    const appUserResult = await client.query(
+      `INSERT INTO AppUser (U_ID, RoleID)
+       VALUES ($1, (SELECT RoleID FROM Roles WHERE RoleName = 'observer'))
+       RETURNING UserID`,
+      [userInfoId]
+    );
+
+    const appUserId = appUserResult.rows[0].userid;
+
+    // Finally create the Observer
+    const observerResult = await client.query(
+      `INSERT INTO Observer (U_ID, Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ObserverID`,
+      [appUserId, email, hashedPassword, name, phonenum, title, scientificRank, fatherName, availability]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({ 
+      message: 'Observer created successfully', 
+      observerID: observerResult.rows[0].observerid 
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error creating observer:', err);
-    res.status(500).json({ message: 'Error creating observer' });
+    if (err.code === '23505') { // unique violation
+      res.status(400).json({ message: 'User already exists' });
+    } else {
+      res.status(500).json({ message: 'Error creating observer', error: err.message });
+    }
   }
 };
 
@@ -148,16 +170,19 @@ const getUsers = async (req, res) => {
       SELECT ui.ID, ui.Name, ui.Email, ui.PhoneNum, MIN(u.RoleID) AS RoleID
       FROM "appuser" u
       JOIN UserInfo ui ON u.U_ID = ui.ID
+      JOIN Roles r ON u.RoleID = r.RoleID
+      WHERE r.RoleName IN ('normal_user', 'admin')  -- Only get internal users
       GROUP BY ui.ID, ui.Name, ui.Email, ui.PhoneNum
     `);
 
     res.status(200).json(result.rows.map(user => {
-      const role = user.roleid === 2 ? 'admin' : 'normal_user'; // Determine role
-
       return {
-        ...user,
-        role: role, // Add the role property to the user object
-        isAdmin: user.roleid === 2 // Indicate if the user is an admin based on RoleID
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phonenum: user.phonenum,
+        role: user.roleid === 2 ? 'admin' : 'normal_user',
+        isAdmin: user.roleid === 2
       };
     }));
 
@@ -168,27 +193,28 @@ const getUsers = async (req, res) => {
 };
 
 
-// Get all observers (with userInfo and timeSlot info)
+// Get all observers with their role information
 const getObservers = async (req, res) => {
   try {
     const result = await client.query(`
       SELECT 
         o.ObserverID, 
-        ui.Name, 
-        ui.Email, 
+        o.Name,
+        o.Email, 
         o.Title AS ObserverTitle, 
         o.ScientificRank, 
         o.FatherName, 
-        o.Availability, 
+        o.Availability,
+        au.UserID,
+        r.RoleName,
         ts.TimeSlotID, 
         ts.StartTime, 
         ts.EndTime, 
-        ts.Day,
-        c.CourseName
+        ts.Day
       FROM Observer o
-      LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
+      JOIN AppUser au ON o.U_ID = au.UserID
+      JOIN Roles r ON au.RoleID = r.RoleID
       LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
-      LEFT JOIN Course c ON o.CourseID = c.CourseID
       ORDER BY o.ObserverID, ts.Day
     `);
 
@@ -198,18 +224,18 @@ const getObservers = async (req, res) => {
       if (!acc[observerId]) {
         acc[observerId] = {
           observerID: row.observerid,
+          userID: row.userid,
+          role: row.rolename,
           name: row.name,
           email: row.email,
           title: row.observertitle,
           scientificRank: row.scientificrank,
           fatherName: row.fathername,
           availability: row.availability,
-          courseName: row.coursename,
           timeslots: [],
         };
       }
 
-      // Add timeslot data if it exists
       if (row.timeslotid) {
         acc[observerId].timeslots.push({
           timeSlotID: row.timeslotid,
@@ -222,10 +248,7 @@ const getObservers = async (req, res) => {
       return acc;
     }, {});
 
-    // Convert the grouped data into an array
-    const response = Object.values(observers);
-
-    res.status(200).json(response);
+    res.status(200).json(Object.values(observers));
   } catch (err) {
     console.error('Error retrieving observers:', err);
     res.status(500).json({ message: 'Error retrieving observers' });
@@ -237,25 +260,34 @@ const getUserById = async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await client.query(` 
-      SELECT u.UserID, ui.Name, ui.Email, ui.PhoneNum, u.RoleID
-      FROM "appuser" u
-      JOIN UserInfo ui ON u.U_ID = ui.ID
-      WHERE u.UserID = $1
+    const result = await client.query(`
+      SELECT ui.ID, ui.Name, ui.Email, ui.PhoneNum, r.RoleName
+      FROM UserInfo ui
+      JOIN AppUser au ON ui.ID = au.U_ID
+      JOIN Roles r ON au.RoleID = r.RoleID
+      WHERE ui.ID = $1 AND r.RoleName IN ('normal_user', 'admin')
     `, [id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.status(200).json(result.rows[0]);
+    const user = result.rows[0];
+    res.status(200).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phonenum: user.phonenum,
+      role: user.rolename,
+      isAdmin: user.rolename === 'admin'
+    });
   } catch (err) {
     console.error('Error retrieving user:', err);
     res.status(500).json({ message: 'Error retrieving user' });
   }
 };
 
-// Get an observer by ID (with userInfo and timeSlot info)
+// Get observer by ID
 const getObserverById = async (req, res) => {
   const { id } = req.params;
 
@@ -263,21 +295,22 @@ const getObserverById = async (req, res) => {
     const result = await client.query(`
       SELECT 
         o.ObserverID, 
-        ui.Name, 
-        ui.Email, 
+        o.Name,
+        o.Email, 
         o.Title AS ObserverTitle, 
         o.ScientificRank, 
         o.FatherName, 
-        o.Availability, 
+        o.Availability,
+        au.UserID,
+        r.RoleName,
         ts.TimeSlotID, 
         ts.StartTime, 
         ts.EndTime, 
-        ts.Day,
-        c.CourseName
+        ts.Day
       FROM Observer o
-      LEFT JOIN UserInfo ui ON o.U_ID = ui.ID
+      JOIN AppUser au ON o.U_ID = au.UserID
+      JOIN Roles r ON au.RoleID = r.RoleID
       LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
-      LEFT JOIN Course c ON o.CourseID = c.CourseID
       WHERE o.ObserverID = $1
       ORDER BY ts.Day
     `, [id]);
@@ -286,18 +319,19 @@ const getObserverById = async (req, res) => {
       return res.status(404).json({ message: 'Observer not found' });
     }
 
-    // Group timeslots by observer
+    // Format the response
     const observer = {
       observerID: result.rows[0].observerid,
+      userID: result.rows[0].userid,
+      role: result.rows[0].rolename,
       name: result.rows[0].name,
       email: result.rows[0].email,
       title: result.rows[0].observertitle,
       scientificRank: result.rows[0].scientificrank,
       fatherName: result.rows[0].fathername,
       availability: result.rows[0].availability,
-      courseName: result.rows[0].coursename,
       timeslots: result.rows
-        .filter(row => row.timeslotid) // Filter out rows without timeslots
+        .filter(row => row.timeslotid)
         .map(row => ({
           timeSlotID: row.timeslotid,
           startTime: row.starttime,
@@ -315,16 +349,102 @@ const getObserverById = async (req, res) => {
 
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, email, phonenum, password } = req.body; // Use "phonenum" instead of "phoneNum"
+  const { name, email, phonenum, password, role } = req.body;
 
-  // Start building the query
-  let query = `UPDATE "userinfo" SET `;
+  try {
+    // First check if the user is an internal user
+    const userCheck = await client.query(`
+      SELECT r.RoleName
+      FROM AppUser au
+      JOIN Roles r ON au.RoleID = r.RoleID
+      WHERE au.U_ID = $1
+    `, [id]);
 
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!['normal_user', 'admin'].includes(userCheck.rows[0].rolename)) {
+      return res.status(400).json({ message: "Cannot update observer through this endpoint" });
+    }
+
+    let query = `UPDATE userinfo SET `;
+
+    const values = [];
+    let index = 1;
+    let fieldsProvided = false;
+
+    if (name) {
+        query += `Name = $${index++}, `;
+        values.push(name);
+        fieldsProvided = true;
+    }
+    if (email) {
+        query += `Email = $${index++}, `;
+        values.push(email);
+        fieldsProvided = true;
+    }
+    if (phonenum) {
+        query += `PhoneNum = $${index++}, `;
+        values.push(phonenum);
+        fieldsProvided = true;
+    }
+    if (password) {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        query += `Password = $${index++}, `;
+        values.push(hashedPassword);
+        fieldsProvided = true;
+    }
+
+    if (!fieldsProvided) {
+        return res.status(400).json({ message: "No fields provided for update" });
+    }
+
+    // Remove the trailing comma and space
+    query = query.slice(0, -2);
+
+    query += ` WHERE ID = $${index}`;
+    values.push(id);
+
+    const result = await client.query(query, values);
+
+    if (result.rowCount === 0) {
+        return res.status(404).json({ message: "User not found" });
+    }
+
+    // Update the role in AppUser table, ensuring it's a user
+    const roleId = role === 'admin' ? 2 : 1; // Convert role to RoleID
+    const updateUserQuery = `
+        UPDATE AppUser
+        SET RoleID = $1
+        WHERE U_ID = $2
+        AND UserID = (
+            SELECT UserID
+            FROM AppUser
+            WHERE U_ID = $2
+            ORDER BY UserID ASC
+            LIMIT 1
+        )
+    `;
+    await client.query(updateUserQuery, [roleId, id]);
+
+    res.status(200).json({ message: "User updated successfully" });
+  } catch (err) {
+    console.error('Error updating user:', err);
+    res.status(500).json({ message: 'Error updating user' });
+  }
+};
+
+// Update an observer
+const updateObserver = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, phonenum, title, scientificRank, fatherName, availability } = req.body;
+
+  let query = `UPDATE Observer SET `;
   const values = [];
   let index = 1;
   let fieldsProvided = false;
 
-  // Check which fields are provided and build the query
   if (name) {
     query += `Name = $${index++}, `;
     values.push(name);
@@ -335,66 +455,14 @@ const updateUser = async (req, res) => {
     values.push(email);
     fieldsProvided = true;
   }
-  if (phonenum) { // Use "phonenum" instead of "phoneNum"
-    query += `PhoneNum = $${index++}, `; // Keep "PhoneNum" in the query (database column name)
+  if (phonenum) {
+    query += `PhoneNum = $${index++}, `;
     values.push(phonenum);
     fieldsProvided = true;
   }
-  if (password) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    query += `Password = $${index++}, `;
-    values.push(hashedPassword);
-    fieldsProvided = true;
-  }
-
-  // If no fields were provided, return an error
-  if (!fieldsProvided) {
-    return res.status(400).json({ message: "No fields provided for update" });
-  }
-
-  // Remove the last comma and space
-  query = query.slice(0, -2);
-  query += ` WHERE ID = $${index} RETURNING ID`;
-  values.push(id);
-
-  try {
-    const result = await client.query(query, values);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.status(200).json({ message: 'User updated successfully' });
-  } catch (err) {
-    console.error('Error updating user:', err);
-    res.status(500).json({ message: 'Error updating user' });
-  }
-};
-// Update an observer
-const updateObserver = async (req, res) => {
-  const { id } = req.params;
-  const { userID, courseID, name, scientificRank, fatherName, availability } = req.body;
-
-  // Start building the query
-  let query = `UPDATE Observer SET `;
-  const values = [];
-  let index = 1;
-  let fieldsProvided = false;
-
-  // Check which fields are provided and build the query
-  if (userID) {
-    query += `U_ID = $${index++}, `;
-    values.push(userID);
-    fieldsProvided = true;
-  }
-  if (courseID) {
-    query += `CourseID = $${index++}, `;
-    values.push(courseID);
-    fieldsProvided = true;
-  }
-  if (name) {
-    query += `Name = $${index++}, `;
-    values.push(name);
+  if (title) {
+    query += `Title = $${index++}, `;
+    values.push(title);
     fieldsProvided = true;
   }
   if (scientificRank) {
@@ -408,32 +476,38 @@ const updateObserver = async (req, res) => {
     fieldsProvided = true;
   }
   if (availability) {
+    if (!['full-time', 'part-time'].includes(availability)) {
+      return res.status(400).json({ message: 'Availability must be either full-time or part-time' });
+    }
     query += `Availability = $${index++}, `;
     values.push(availability);
     fieldsProvided = true;
   }
 
-  // If no fields were provided, return an error
   if (!fieldsProvided) {
     return res.status(400).json({ message: "No fields provided for update" });
   }
 
-  // Remove the last comma and space
+  // Remove the trailing comma and space
   query = query.slice(0, -2);
-  query += ` WHERE ObserverID = $${index} RETURNING ObserverID`;
+  query += ` WHERE ObserverID = $${index}`;
   values.push(id);
 
   try {
     const result = await client.query(query, values);
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'Observer not found' });
+      return res.status(404).json({ message: "Observer not found" });
     }
 
-    res.status(200).json({ message: 'Observer updated successfully', observerID: result.rows[0].ObserverID });
+    res.status(200).json({ message: "Observer updated successfully" });
   } catch (err) {
     console.error('Error updating observer:', err);
-    res.status(500).json({ message: 'Error updating observer' });
+    if (err.message.includes('Cannot set observer to full-time')) {
+      res.status(400).json({ message: err.message });
+    } else {
+      res.status(500).json({ message: 'Error updating observer' });
+    }
   }
 };
 

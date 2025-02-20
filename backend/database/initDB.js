@@ -38,7 +38,6 @@ async function initDB() {
       SeatingCapacity INT NOT NULL
     );
 
-
     CREATE TABLE IF NOT EXISTS Roles (
       RoleID SERIAL PRIMARY KEY,
       RoleName VARCHAR(255) UNIQUE NOT NULL
@@ -71,28 +70,91 @@ async function initDB() {
       Title VARCHAR(255),
       ScientificRank VARCHAR(255),
       FatherName VARCHAR(255),
-      Availability availability_enum NOT NULL,
-      CourseID INT REFERENCES Course(CourseID) ON DELETE SET NULL
+      Availability availability_enum NOT NULL
     );
     
     CREATE TABLE IF NOT EXISTS TimeSlot (
       TimeSlotID SERIAL PRIMARY KEY,
-      StartTime TIME  NOT NULL,
-      EndTime TIME  NOT NULL,
+      StartTime TIME NOT NULL,
+      EndTime TIME NOT NULL,
       day VARCHAR(10),
       ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
     );
+
+    -- Create a function to check observer availability
+    CREATE OR REPLACE FUNCTION check_observer_availability()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1 FROM Observer 
+            WHERE ObserverID = NEW.ObserverID 
+            AND Availability = 'full-time'
+        ) THEN
+            RAISE EXCEPTION 'Cannot add time slots for full-time observers';
+        END IF;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create trigger for inserting time slots
+    DROP TRIGGER IF EXISTS check_timeslot_insert ON TimeSlot;
+    CREATE TRIGGER check_timeslot_insert
+    BEFORE INSERT ON TimeSlot
+    FOR EACH ROW
+    EXECUTE FUNCTION check_observer_availability();
+
+    -- Create trigger for updating observer availability
+    CREATE OR REPLACE FUNCTION check_observer_update()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        IF NEW.Availability = 'full-time' AND EXISTS (
+            SELECT 1 FROM TimeSlot 
+            WHERE ObserverID = NEW.ObserverID
+        ) THEN
+            RAISE EXCEPTION 'Cannot set observer to full-time when they have time slots';
+        END IF;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create trigger for updating observer
+    DROP TRIGGER IF EXISTS check_observer_update ON Observer;
+    CREATE TRIGGER check_observer_update
+    BEFORE UPDATE ON Observer
+    FOR EACH ROW
+    EXECUTE FUNCTION check_observer_update();
 
     CREATE TABLE IF NOT EXISTS ExamSchedule (
       ExamID SERIAL PRIMARY KEY,
       CourseID INT REFERENCES Course(CourseID) ON DELETE CASCADE,
       RoomID INT REFERENCES Room(RoomID) ON DELETE CASCADE,
-      ExamName VARCHAR(255) NOT NULL,
-      StartTime TIME  NOT NULL,
-      EndTime TIME  NOT NULL,
-      NumOfStudents INT,
-      ExamDate DATE NOT NULL
+      ExamName VARCHAR(255) NOT NULL,      
+      ExamType VARCHAR(50) NOT NULL,       
+      StartTime TIME NOT NULL,
+      EndTime TIME NOT NULL,
+      ExamDate DATE NOT NULL,
+      NumOfStudents INT NOT NULL,
+      ExamHead INT REFERENCES Observer(ObserverID),
+      ExamSecretary INT REFERENCES Observer(ObserverID),
+      Status VARCHAR(50) DEFAULT 'unassigned',
+      CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Timestamp update trigger
+    CREATE OR REPLACE FUNCTION update_timestamp()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.UpdatedAt = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS update_exam_timestamp ON ExamSchedule;
+    CREATE TRIGGER update_exam_timestamp
+    BEFORE UPDATE ON ExamSchedule
+    FOR EACH ROW
+    EXECUTE FUNCTION update_timestamp();
 
     CREATE TABLE IF NOT EXISTS Preferences (
       PreferenceID SERIAL PRIMARY KEY,
@@ -101,11 +163,28 @@ async function initDB() {
       Description TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS DistributeSchedule (
-      ScheduleID SERIAL PRIMARY KEY,
-      ExamScheduleID INT REFERENCES ExamSchedule(ExamID) ON DELETE CASCADE,
-      ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
+    -- First create the ENUM types
+    CREATE TYPE semester_type AS ENUM ('First', 'Second', 'Summer');
+    CREATE TYPE exam_type AS ENUM ('First', 'Second', 'Practical', 'Final');
+
+    -- Then create the table
+    CREATE TABLE IF NOT EXISTS UploadedSchedules (
+      UploadID SERIAL PRIMARY KEY,
+      AcademicYear VARCHAR(9) NOT NULL,
+      Semester semester_type NOT NULL,
+      ExamType exam_type NOT NULL,
+      FileName VARCHAR(255) NOT NULL,
+      UploadedBy INT REFERENCES AppUser(UserID),
+      UploadedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ProcessedAt TIMESTAMP,
+      Status VARCHAR(50) DEFAULT 'pending',
+      ErrorLog TEXT,
+      UNIQUE(AcademicYear, Semester, ExamType)
     );
+
+    -- Modify ExamSchedule table to include the schedule reference
+    ALTER TABLE ExamSchedule 
+    ADD COLUMN ScheduleID INT REFERENCES UploadedSchedules(UploadID);
   `;
 
   try {
@@ -149,10 +228,21 @@ async function initDB() {
     const userCount = await client.query('SELECT COUNT(*) FROM UserInfo');
     if (parseInt(userCount.rows[0].count) === 0) {
       await client.query(`
+        -- First, insert admin users
+        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
+        ('amer', 'amer@gmail.com', '123456', '123456'),
+        ('majd', 'majd@gmail.com', '123456', '123456');
+
+        -- Then, insert regular users
         INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
         ('Alice Smith', 'alice@example.com', '1234567890', 'password123'),
-        ('Bob Johnson', 'bob@example.com', '0987654321', 'password456'),
-        ('Charlie Brown', 'charlie@example.com', '5555555555', 'password789');
+        ('Bob Johnson', 'bob@example.com', '0987654321', 'password456');
+
+        -- Then, insert observer users separately
+        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
+        ('John Smith', 'john.smith@example.com', '1234567890', 'observerpassword'),
+        ('Robert Johnson', 'robert.johnson@example.com', '0987654321', 'observerpassword'),
+        ('David Brown', 'david.brown@example.com', '5555555555', 'observerpassword');
       `);
     }
 
@@ -160,12 +250,36 @@ async function initDB() {
     const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
     if (parseInt(appUserCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO AppUser (U_ID, RoleID) VALUES
-        (1, (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')),
-        (2, (SELECT RoleID FROM Roles WHERE RoleName = 'admin')),
-        (3, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
-        (1, (SELECT RoleID FROM Roles WHERE RoleName = 'observer')),
-        (2, (SELECT RoleID FROM Roles WHERE RoleName = 'observer'));
+        -- Insert admin users first
+        INSERT INTO AppUser (U_ID, RoleID)
+        SELECT 
+          ui.ID,
+          (SELECT RoleID FROM Roles WHERE RoleName = 'admin')
+        FROM UserInfo ui
+        WHERE ui.Email IN ('amer@gmail.com', 'majd@gmail.com');
+
+        -- Insert regular users with their roles
+        INSERT INTO AppUser (U_ID, RoleID)
+        SELECT 
+          ui.ID,
+          CASE 
+            WHEN ui.Email = 'alice@example.com' THEN (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')
+            WHEN ui.Email = 'bob@example.com' THEN (SELECT RoleID FROM Roles WHERE RoleName = 'admin')
+          END
+        FROM UserInfo ui
+        WHERE ui.Email IN ('alice@example.com', 'bob@example.com');
+
+        -- Insert observers with observer role
+        INSERT INTO AppUser (U_ID, RoleID)
+        SELECT 
+          ui.ID,
+          (SELECT RoleID FROM Roles WHERE RoleName = 'observer')
+        FROM UserInfo ui
+        WHERE ui.Email IN (
+          'john.smith@example.com',
+          'robert.johnson@example.com',
+          'david.brown@example.com'
+        );
       `);
     }
 
@@ -173,9 +287,51 @@ async function initDB() {
     const observerCount = await client.query('SELECT COUNT(*) FROM Observer');
     if (parseInt(observerCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO Observer (U_ID, CourseID, Title, ScientificRank, FatherName, Availability, Email, Password, Name, PhoneNum) VALUES
-        (1, NULL, 'Dr.', 'Professor', 'John Smith', 'full-time', 'john.smith@example.com', 'observerpassword', 'John Smith', '1234567890'),
-        (2, NULL, 'Prof.', 'Associate Professor', 'Robert Johnson', 'part-time', 'robert.johnson@example.com', 'observerpassword', 'Robert Johnson', '0987654321');
+        INSERT INTO Observer (U_ID, Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability) 
+        SELECT 
+          au.UserID,
+          ui.Email,
+          ui.Password,
+          ui.Name,
+          ui.PhoneNum,
+          CASE 
+            WHEN ui.Name = 'John Smith' THEN 'Dr.'
+            WHEN ui.Name = 'Robert Johnson' THEN 'Prof.'
+            ELSE 'Dr.'
+          END as Title,
+          CASE 
+            WHEN ui.Name = 'John Smith' THEN 'Professor'
+            WHEN ui.Name = 'Robert Johnson' THEN 'Associate Professor'
+            ELSE 'Assistant Professor'
+          END as ScientificRank,
+          CASE 
+            WHEN ui.Name = 'John Smith' THEN 'John Smith Sr.'
+            WHEN ui.Name = 'Robert Johnson' THEN 'Robert Johnson Sr.'
+            ELSE 'William Anderson'
+          END as FatherName,
+          CASE 
+            WHEN ui.Name = 'John Smith' THEN 'full-time'::availability_enum
+            ELSE 'part-time'::availability_enum
+          END as Availability
+        FROM AppUser au
+        JOIN UserInfo ui ON au.U_ID = ui.ID
+        WHERE ui.Email IN (
+          'john.smith@example.com',
+          'robert.johnson@example.com',
+          'david.brown@example.com'
+        );
+      `);
+    }
+
+    // Insert dummy data into TimeSlot if empty (only for part-time observers)
+    const timeSlotCount = await client.query('SELECT COUNT(*) FROM TimeSlot');
+    if (parseInt(timeSlotCount.rows[0].count) === 0) {
+      await client.query(`
+        INSERT INTO TimeSlot (StartTime, EndTime, day, ObserverID) VALUES
+        ('09:00:00', '10:00:00', 'Monday', 2),    -- For Robert Johnson
+        ('10:30:00', '11:30:00', 'Wednesday', 2),
+        ('14:00:00', '15:00:00', 'Monday', 3),    -- For Alice Williams
+        ('15:30:00', '16:30:00', 'Thursday', 3);
       `);
     }
 
@@ -205,24 +361,13 @@ async function initDB() {
       `);
     }
 
-    // Insert dummy data into TimeSlot if empty
-    const timeSlotCount = await client.query('SELECT COUNT(*) FROM TimeSlot');
-    if (parseInt(timeSlotCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO TimeSlot (StartTime, EndTime, day, ObserverID) VALUES
-        (' 09:00:00', ' 10:00:00', 'Monday', 1),
-        (' 10:30:00', ' 11:30:00', 'Monday', 1),
-        (' 12:00:00', ' 13:00:00', 'Monday', 1);
-      `);
-    }
-
     // Insert dummy data into ExamSchedule if empty
     const examScheduleCount = await client.query('SELECT COUNT(*) FROM ExamSchedule');
     if (parseInt(examScheduleCount.rows[0].count) === 0) {
       await client.query(`
-        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, StartTime, EndTime, NumOfStudents, ExamDate) VALUES
-        (1, 1, 'Midterm Exam',  '09:00:00', ' 11:00:00', 30, '2023-10-15'),
-        (2, 2, 'Final Exam', '10:00:00', ' 13:00:00', 25, '2023-12-10');
+        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, StartTime, EndTime, NumOfStudents, ExamDate, ExamHead, ExamSecretary) VALUES
+        (1, 1, 'Midterm Exam', 'theoretical', '09:00:00', '11:00:00', 30, '2023-10-15', 1, 2),
+        (2, 2, 'Final Exam', 'practical', '10:00:00', '13:00:00', 25, '2023-12-10', 2, 3);
       `);
     }
 
@@ -233,16 +378,6 @@ async function initDB() {
         INSERT INTO Preferences (ExamScheduleID, ObserverID, Description) VALUES
         (1, 1, 'Preferred time slot for the exam.'),
         (2, 2, 'Needs additional resources for preparation.');
-      `);
-    }
-
-    // Insert dummy data into DistributeSchedule if empty
-    const distributeScheduleCount = await client.query('SELECT COUNT(*) FROM DistributeSchedule');
-    if (parseInt(distributeScheduleCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO DistributeSchedule (ExamScheduleID, ObserverID) VALUES
-        (1, 1),
-        (2, 2);
       `);
     }
 

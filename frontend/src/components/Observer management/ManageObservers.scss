@@ -1,0 +1,392 @@
+.manage-observers-container {
+    padding: 20px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    max-width: 1200px;
+    margin: 0 auto;
+
+    h1 {
+        color: #343a40;
+        margin-bottom: 25px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 2rem;
+    }
+
+    .search-bar {
+        position: relative;
+        margin-bottom: 30px;
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 12px 12px 40px;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+
+            &:focus {
+                border-color: #80bdff;
+                outline: none;
+                box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            }
+        }
+
+        .clear-search {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: #6c757d;
+
+            &:hover {
+                color: #343a40;
+            }
+        }
+    }
+
+    .observer-table-container {
+        overflow-x: auto;
+    }
+
+    .observer-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 2rem;
+
+        th,
+        td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #39A2DB;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.3s ease;
+
+            &:hover {
+                background-color: #2E86AB;
+            }
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        td {
+            &:last-child {
+                white-space: nowrap;
+                min-width: 160px;
+            }
+        }
+
+        .edit-button, .delete-button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-right: 8px;
+
+            &:last-child {
+                margin-right: 0;
+            }
+
+            svg {
+                font-size: 14px;
+            }
+
+            &:hover {
+                transform: translateY(-1px);
+            }
+        }
+
+        .edit-button {
+            background-color: #007bff;
+            color: #ffffff;
+
+            &:hover {
+                background-color: #0056b3;
+            }
+        }
+
+        .delete-button {
+            background-color: #dc3545;
+            color: #ffffff;
+
+            &:hover {
+                background-color: #c82333;
+            }
+        }
+    }
+
+    .create-button {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        background-color: #28a745;
+        color: #ffffff;
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &:hover {
+            background-color: #218838;
+            transform: translateY(-1px);
+        }
+
+        svg {
+            font-size: 1.5rem;
+        }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 1.2rem;
+        }
+    }
+
+    .loading-spinner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        color: #007bff;
+
+        .spinner-icon {
+            margin-right: 10px;
+            animation: spin 1s cubic-bezier(0.68, -0.55, 0.27, 1.55) infinite;
+        }
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        list-style: none;
+        padding: 0;
+        margin-top: 20px;
+
+        .page-item {
+            margin: 0 5px;
+
+            .page-link {
+                padding: 8px 12px;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                color: #007bff;
+                background-color: #fff;
+                cursor: pointer;
+                transition: all 0.2s ease;
+
+                &:hover {
+                    background-color: #e9ecef;
+                }
+            }
+
+            &.active .page-link {
+                background-color: #007bff;
+                color: #fff;
+                border-color: #007bff;
+            }
+        }
+    }
+
+    .time-slot-cell {
+        position: relative;
+        padding: 8px;
+        text-align: left;
+        transition: background-color 0.2s ease;
+
+        &:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+
+        .add-time-slot-button {
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            right: 2px;
+            bottom: 2px;
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+
+            svg {
+                color: #007bff;
+                font-size: 12px;
+                transition: color 0.2s ease;
+            }
+
+            &:hover {
+                transform: scale(1);
+                background: #fff;
+
+                svg {
+                    color: #0056b3;
+                }
+            }
+        }
+
+        &:hover .add-time-slot-button {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .full-time-indicator {
+            display: block;
+            text-align: center;
+            padding: 8px 12px;
+            background-color: #e2e8f0;
+            border: 2px solid #cbd5e0;
+            border-radius: 6px;
+            color: #4a5568;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 4px 0;
+            transition: all 0.2s ease;
+            
+            &:hover {
+                background-color: #cbd5e0;
+                border-color: #a0aec0;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            &::before {
+                content: '👨‍💼'; // Unicode emoji for "office worker"
+                margin-right: 6px;
+            }
+        }
+
+        // Hide the add time slot button when observer is full-time
+        &.full-time {
+            background-color: rgba(226, 232, 240, 0.3);
+            position: relative;
+            
+            // Add a subtle diagonal pattern
+            &::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-image: repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(0, 0, 0, 0.03) 10px,
+                    rgba(0, 0, 0, 0.03) 20px
+                );
+                pointer-events: none; // This ensures the pattern doesn't interfere with clicks
+            }
+
+            // Hide the add time slot button for full-time observers
+            .add-time-slot-button {
+                display: none;
+            }
+        }
+    }
+
+    .time-slot {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin: 2px 0;
+        padding: 4px 8px;
+        background-color: rgba(233, 236, 239, 0.5);
+        border-radius: 4px;
+        transition: all 0.2s ease;
+
+        &:hover {
+            background-color: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        .time-slot-actions {
+            opacity: 0;
+            transform: translateX(-5px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            gap: 2px;
+            margin-left: 4px;
+        }
+
+        &:hover .time-slot-actions {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .edit-time-slot-button {
+        padding: 4px;
+        border-radius: 3px;
+        transition: all 0.2s ease;
+
+        &:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+            transform: scale(1.1);
+        }
+
+        svg {
+            transition: transform 0.2s ease;
+        }
+    }
+}

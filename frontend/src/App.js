@@ -3,11 +3,11 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import ForgotPassword from './components/ForgotPassword';
 import Login from './components/Login';
-import ManageObservers from './components/ManageObservers';
+import ManageObservers from './components/Observer management/ManageObservers';
+import ManageExams from './components/Exam management/ManageExams';
 import Dashboard from './components/Dashboard';
-import ManageUsers from './components/ManageUsers';
+import ManageUsers from './components/User Management/ManageUsers';
 import Navbar from './components/Navbar'; // Import the Navbar component
-import CreateUser from './components/CreateUser';
 
 const App = () => {
   const [role, setRole] = useState(null);
@@ -72,10 +72,10 @@ const App = () => {
           <Route path="/" element={<Login onLoginSuccess={handleLogin} />} />
           <Route path="/login" element={<Login onLoginSuccess={handleLogin} />} /> {/* Explicit login route */}
           <Route path="/dashboard" element={role === 'admin' ? <Dashboard /> : <Navigate to="/login" />} />
-          <Route path="/manage-users" element={role === 'admin' ? <ManageUsers /> : <Navigate to="/login" />} />
-          <Route path="/create-user" element={role === 'admin' ? <CreateUser /> : <Navigate to="/login" />} />          
+          <Route path="/manage-users" element={role === 'admin' ? <ManageUsers /> : <Navigate to="/login" />} />          
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/manage-observers" element={<ManageObservers />} />
+          <Route path="/manage-exams" element={role === 'admin' ? <ManageExams /> : <Navigate to="/login" />} />
         </Routes>
       </div>
     </Router>
