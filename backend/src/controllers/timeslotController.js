@@ -23,14 +23,21 @@ const addTimeSlot = async (req, res) => {
     }
 
     try {
-        // Check if the observer exists
-        const observerExists = await client.query(
-            `SELECT * FROM Observer WHERE ObserverID = $1`,
+        // Check if the observer exists and get their availability
+        const observerResult = await client.query(
+            `SELECT availability FROM Observer WHERE ObserverID = $1`,
             [observerID]
         );
 
-        if (observerExists.rows.length === 0) {
+        if (observerResult.rows.length === 0) {
             return res.status(404).json({ message: 'Observer not found' });
+        }
+
+        // Check if observer is full-time
+        if (observerResult.rows[0].availability === 'full-time') {
+            return res.status(400).json({ 
+                message: 'Cannot add time slots for full-time observers' 
+            });
         }
 
         // Check for existing time slots for the same observer on the same day and overlapping times
@@ -64,7 +71,12 @@ const addTimeSlot = async (req, res) => {
     }
 };
 const updateTimeSlot = async (req, res) => {
-    const { timeSlotID } = req.params; // Get the timeSlotID from the request parameters
+    const timeSlotID = parseInt(req.params.timeSlotID); // Convert to integer explicitly
+    
+    if (isNaN(timeSlotID)) {
+        return res.status(400).json({ message: 'Invalid TimeSlotID format' });
+    }
+
     const { startTime, endTime, day, observerID } = req.body;
 
     // Validate required fields
@@ -103,6 +115,18 @@ const updateTimeSlot = async (req, res) => {
 
         if (observerExists.rows.length === 0) {
             return res.status(404).json({ message: 'Observer not found' });
+        }
+
+        // Check observer's availability
+        const observerResult = await client.query(
+            `SELECT availability FROM Observer WHERE ObserverID = $1`,
+            [observerID]
+        );
+
+        if (observerResult.rows[0].availability === 'full-time') {
+            return res.status(400).json({ 
+                message: 'Cannot update time slots for full-time observers' 
+            });
         }
 
         // Update the time slot in the database

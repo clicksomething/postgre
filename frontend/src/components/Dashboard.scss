@@ -1,0 +1,77 @@
+/* Welcome.css */
+
+/* Variables */
+$font-family-base: 'Inter', sans-serif;
+$color-primary: #4c51bf;
+$color-text-primary: #2d3748;
+$color-text-secondary: #4a5568;
+$color-background: #f8f9fa;
+$color-white: #ffffff;
+$box-shadow-default: 0 2px 10px rgba(0, 0, 0, 0.1);
+
+/* General Styles */
+body {
+    margin: 0;
+    font-family: $font-family-base;
+    background-color: $color-background;
+    color: $color-text-primary;
+}
+
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 80px; /* Add padding to account for the fixed navbar */
+    min-height: 100vh;
+}
+
+/* Welcome Message */
+.welcome-message {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    padding: 0 2rem;
+    
+    h2 {
+        font-size: 2.25rem;
+        font-weight: 600;
+        color: $color-primary;
+        margin-bottom: 0.75rem;
+        transition: color 0.3s ease;
+        
+        &:hover {
+            color: darken($color-primary, 10%);
+        }
+    }
+    
+    p {
+        font-size: 1.125rem;
+        color: $color-text-secondary;
+        line-height: 1.6;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+}
+
+/* Main Content */
+.main-content {
+    width: 100%;
+    max-width: 1200px;
+    padding: 2.5rem;
+    background-color: $color-white;
+    border-radius: 12px;
+    box-shadow: $box-shadow-default;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    p {
+        font-size: 1.125rem;
+        color: $color-text-secondary;
+        line-height: 1.6;
+        margin: 1rem 0;
+    }
+}

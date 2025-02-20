@@ -8,8 +8,9 @@ const EditObserverModal = ({ observer, onClose, onSave }) => {
         e.preventDefault();
         // Prepare updated observer data
         const updatedObserver = {
-            ...observer,
-            title: e.target.title.value, // ADD THIS LINE
+            observerID: observer.observerID,
+            userID: observer.userID, // Add this to maintain the link with AppUser
+            title: e.target.title.value,
             name: e.target.name.value,
             email: e.target.email.value,
             phoneNum: e.target.phoneNum.value,

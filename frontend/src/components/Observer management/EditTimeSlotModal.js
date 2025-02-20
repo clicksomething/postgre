@@ -3,23 +3,30 @@ import './EditTimeSlotModal.scss';
 import { FaSave, FaTimes, FaTrash } from 'react-icons/fa';
 
 const EditTimeSlotModal = ({ timeSlot, onClose, onSave, onDelete }) => {
-    const [startTime, setStartTime] = useState(timeSlot.startTime);
-    const [endTime, setEndTime] = useState(timeSlot.endTime);
-    const [day, setDay] = useState(timeSlot.day);
+    const [startTime, setStartTime] = useState(timeSlot?.startTime || '');
+    const [endTime, setEndTime] = useState(timeSlot?.endTime || '');
+    const [day, setDay] = useState(timeSlot?.day || 'Monday');
 
     const handleSubmit = () => {
-        // Handle saving the time slot
-        const updatedTimeSlot = { ...timeSlot, startTime, endTime, day };
+        const updatedTimeSlot = {
+            timeSlotID: timeSlot.timeSlotID,
+            startTime,
+            endTime,
+            day,
+            observerID: Number(timeSlot.observerID)
+        };
+
         onSave(updatedTimeSlot);
         onClose();
     };
 
     const handleDelete = () => {
         // Handle deleting the time slot
-        if (timeSlot && timeSlot.TimeSlotID) {
-            onDelete(timeSlot.TimeSlotID);
+        if (timeSlot && timeSlot.timeSlotID) {
+            console.log("Deleting timeSlot with ID:", timeSlot.timeSlotID);
+            onDelete(timeSlot.timeSlotID);
         } else {
-            console.error("TimeSlotID is undefined. Cannot delete.");
+            console.error("timeSlotID is undefined. Cannot delete.");
         }
         onClose();
     };

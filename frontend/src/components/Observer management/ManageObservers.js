@@ -3,11 +3,12 @@ import axios from 'axios';
 import './ManageObservers.scss';
 import EditObserverModal from './EditObserverModal';
 import CreateObserverModal from './CreateObserverModal';
-import EditTimeSlotModal from './EditTimeSlotModal'; // Import the new component
+import EditTimeSlotModal from './EditTimeSlotModal';
+import AddTimeSlotModal from './AddTimeSlotModal';
 import { FaSearch, FaPlus, FaEdit, FaSpinner, FaUser } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
-
+import SuccessMessage from '../SuccessMessage';
 const ClientOnlyTooltip = () => {
     const [mounted, setMounted] = useState(false);
 
@@ -43,21 +44,28 @@ const ManageObservers = () => {
     const [observersPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
     const [editingTimeSlot, setEditingTimeSlot] = useState(null);
+    const [isAddingTimeSlot, setIsAddingTimeSlot] = useState(false);
+    const [selectedDay, setSelectedDay] = useState(null);
+    const [selectedObserverID, setSelectedObserverID] = useState(null);
+    const [successMessages, setSuccessMessages] = useState([]);
+
+    // Fetch observers from the API
+    const fetchObservers = async () => {
+        try {
+            setLoading(true);
+            const response = await axios.get('http://localhost:3000/api/observers');
+            setObservers(response.data);
+            setFilteredObservers(response.data);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching observers:', err);
+            setError('Failed to load observers');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchObservers = async () => {
-            try {
-                const response = await axios.get('http://localhost:3000/api/observers');
-                setObservers(response.data);
-                setFilteredObservers(response.data);
-            } catch (err) {
-                console.error('Error fetching observers:', err);
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchObservers();
     }, []);
 
@@ -86,23 +94,12 @@ const ManageObservers = () => {
                 `http://localhost:3000/api/observers/${updatedObserver.observerID}`,
                 updatedObserver
             );
-            setObservers((prevObservers) =>
-                prevObservers.map((observer) =>
-                    observer.observerID === updatedObserver.observerID ? updatedObserver : observer
-                )
-            );
-            setFilteredObservers((prevFilteredObservers) =>
-                prevFilteredObservers.map((observer) =>
-                    observer.observerID === updatedObserver.observerID ? updatedObserver : observer
-                )
-            );
-
-            console.log('Observer updated successfully');
+            await fetchObservers(); // Refresh the list after updating
+            setSuccessMessages(['Observer updated successfully']);
+            setEditingObserver(null);
         } catch (err) {
             console.error('Error updating observer:', err);
-            setError(err.message);
-        } finally {
-            handleCloseEditModal();
+            setError(err.response?.data?.message || 'Error updating observer');
         }
     };
 
@@ -117,100 +114,88 @@ const ManageObservers = () => {
     const handleCreateObserver = async (newObserver) => {
         try {
             const response = await axios.post('http://localhost:3000/api/observers', newObserver);
-            setObservers((prevObservers) => [...prevObservers, response.data]);
-            setFilteredObservers((prevFilteredObservers) => [...prevFilteredObservers, response.data]);
-
-            console.log('Observer created successfully');
+            await fetchObservers(); // Refresh the list after creating
+            setSuccessMessages(['Observer created successfully']);
+            setIsCreatingObserver(false);
         } catch (err) {
             console.error('Error creating observer:', err);
-            setError(err.message);
-        } finally {
-            handleCloseCreateModal();
+            setError(err.response?.data?.message || 'Error creating observer');
         }
     };
+     const handleCloseMessage = (index) => {
+        setSuccessMessages(prevMessages => prevMessages.filter((_, i) => i !== index));
+    };
 
-    const handleEditTimeSlot = (timeSlot) => {
-        console.log("Editing timeSlot:", timeSlot);  // Log the timeSlot
-        setEditingTimeSlot(timeSlot);
+    const handleEditTimeSlot = (timeSlot, observerID) => { // Add observerID parameter
+        const updatedTimeSlot = {
+            ...timeSlot,
+            observerID: observerID // Use lowercase
+        };
+        console.log("Editing timeSlot:", updatedTimeSlot);
+        setEditingTimeSlot(updatedTimeSlot);
     };
 
     const handleSaveTimeSlot = async (updatedTimeSlot) => {
         try {
-            console.log("Saving timeSlot:", updatedTimeSlot);  // Log the updatedTimeSlot
-            await axios.put(`http://localhost:3000/api/timeslots/${updatedTimeSlot.TimeSlotID}`, updatedTimeSlot);
-            setObservers((prevObservers) =>
-                prevObservers.map((observer) => ({
-                    ...observer,
-                    timeslots: observer.timeslots.map((ts) =>
-                        ts.TimeSlotID === updatedTimeSlot.TimeSlotID ? updatedTimeSlot : ts
-                    ),
-                }))
+            await axios.put(
+                `http://localhost:3000/api/timeslots/${updatedTimeSlot.timeSlotID}`,
+                updatedTimeSlot
             );
-            setFilteredObservers((prevFilteredObservers) =>
-                prevFilteredObservers.map((observer) => ({
-                    ...observer,
-                    timeslots: observer.timeslots.map((ts) =>
-                        ts.TimeSlotID === updatedTimeSlot.TimeSlotID ? updatedTimeSlot : ts
-                    ),
-                }))
-            );
-            console.log('Time slot updated successfully');
+            await fetchObservers(); // Refresh the list after updating timeslot
+            setSuccessMessages(['Time slot updated successfully']);
+            setEditingTimeSlot(null);
         } catch (err) {
             console.error('Error updating time slot:', err);
-            setError(err.message);
-        } finally {
-            handleCloseEditTimeSlotModal();
+            setError(err.response?.data?.message || 'Error updating time slot');
         }
     };
 
     const handleDeleteTimeSlot = async (timeSlotID) => {
         try {
-            console.log("Deleting timeSlot with ID:", timeSlotID);  // Log the timeSlotID
             await axios.delete(`http://localhost:3000/api/timeslots/${timeSlotID}`);
-            setObservers((prevObservers) =>
-                prevObservers.map((observer) => ({
-                    ...observer,
-                    timeslots: observer.timeslots.filter((ts) => ts.TimeSlotID !== timeSlotID),
-                }))
-            );
-            setFilteredObservers((prevFilteredObservers) =>
-                prevFilteredObservers.map((observer) => ({
-                    ...observer,
-                    timeslots: observer.timeslots.filter((ts) => ts.TimeSlotID !== timeSlotID),
-                }))
-            );
-            console.log('Time slot deleted successfully');
+            await fetchObservers(); // Refresh the list after deletion
+            setSuccessMessages(['Time slot deleted successfully']);
+            setEditingTimeSlot(null);
         } catch (err) {
             console.error('Error deleting time slot:', err);
-            setError(err.message);
-        } finally {
-            handleCloseEditTimeSlotModal();
-        }
-    };
-    const handleAddTimeSlot = async (newTimeSlot) => {
-        try {
-            const response = await axios.post('http://localhost:3000/api/timeslots', newTimeSlot);
-            setObservers((prevObservers) =>
-                prevObservers.map((observer) =>
-                    observer.ObserverID === newTimeSlot.ObserverID
-                        ? { ...observer, timeslots: [...(observer.timeslots || []), response.data] }
-                        : observer
-                )
-            );
-            setFilteredObservers((prevFilteredObservers) =>
-                prevFilteredObservers.map((observer) =>
-                    observer.ObserverID === newTimeSlot.ObserverID
-                        ? { ...observer, timeslots: [...(observer.timeslots || []), response.data] }
-                        : observer
-                )
-            );
-            console.log('Time slot created successfully');
-        } catch (err) {
-            console.error('Error creating time slot:', err);
-            setError(err.message);
+            setError(err.response?.data?.message || 'Error deleting time slot');
         }
     };
 
+    const handleAddTimeSlotClick = (observerID, day) => {
+        // Get the observer from the current observers state
+        const observer = observers.find(obs => obs.observerID === observerID);
+        
+        if (observer.availability === 'full-time') {
+            // Show error message (you might want to use a toast or alert system)
+            setError('Cannot add time slots for full-time observers');
+            return;
+        }
+
+        setSelectedObserverID(observerID);
+        setSelectedDay(day);
+        setIsAddingTimeSlot(true);
+    };
+
+    const handleCloseAddTimeSlotModal = () => {
+        setIsAddingTimeSlot(false);
+    };
+
+    const handleSaveNewTimeSlot = async (newTimeSlot) => {
+        try {
+            await axios.post('http://localhost:3000/api/timeslots', {
+                ...newTimeSlot,
+                observerID: selectedObserverID,
+                day: selectedDay,
+            });
+            await fetchObservers(); // Refresh the list after creating timeslot
+            setSuccessMessages(['Time slot created successfully']);
+            setIsAddingTimeSlot(false);
+        } catch (err) {
+            console.error('Error creating time slot:', err);
+            setError(err.response?.data?.message || 'Error creating time slot');
+        }
+    };
     const handleCloseEditTimeSlotModal = () => {
         setEditingTimeSlot(null);
     };
@@ -262,11 +247,12 @@ const ManageObservers = () => {
         return <div className="error-message">Error: {error}</div>;
     }
 
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
     return (
         <div className="manage-observers-container">
             <ClientOnlyTooltip />
             <h1>Manage Observers</h1>
-
             <div className="search-bar">
                 <FaSearch className="search-icon" />
                 <input
@@ -305,13 +291,9 @@ const ManageObservers = () => {
                                 </th>
                                 <th onClick={() => requestSort('fatherName')}>Father's Name</th>
                                 <th onClick={() => requestSort('availability')}>Availability</th>
-                                <th>Monday</th>
-                                <th>Tuesday</th>
-                                <th>Wednesday</th>
-                                <th>Thursday</th>
-                                <th>Friday</th>
-                                <th>Saturday</th>
-                                <th>Sunday</th>
+                                {daysOfWeek.map(day => (
+                                    <th key={day}>{day}</th>
+                                ))}
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -323,125 +305,41 @@ const ManageObservers = () => {
                                     <td>{observer.scientificRank}</td>
                                     <td>{observer.fatherName}</td>
                                     <td>{observer.availability === "part-time" ? "Part time" : "Full time"}</td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Monday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
+                                    {daysOfWeek.map(day => (
+                                       <td key={day} className={`time-slot-cell ${observer.availability === 'full-time' ? 'full-time' : ''}`}>
+                                       {observer.availability === 'full-time' ? (
+                                           <span>—</span> // Simple dash to indicate unavailable
+                                       ) : (
+                                                <>
+                                                    {observer.timeslots && observer.timeslots
+                                                        .filter(ts => ts.day === day)
+                                                        .map(timeSlot => (
+                                                            <div key={timeSlot.timeSlotID} className="time-slot">
+                                                                <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
+                                                                <div className="time-slot-actions">
+                                                                    <button
+                                                                        className="edit-time-slot-button"
+                                                                        onClick={() => handleEditTimeSlot(timeSlot, observer.observerID)}
+                                                                        data-tooltip-id="main-tooltip"
+                                                                        data-tooltip-content="Edit time slot"
+                                                                    >
+                                                                        <FaEdit />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     <button
-                                                        className="edit-time-slot-button"
-                                                        onClick={() => handleEditTimeSlot(timeSlot)}
+                                                        className="add-time-slot-button"
+                                                        onClick={() => handleAddTimeSlotClick(observer.observerID, day)}
                                                         data-tooltip-id="main-tooltip"
-                                                        data-tooltip-content="Edit time slot"
+                                                        data-tooltip-content="Add time slot"
                                                     >
-                                                        <FaEdit />
+                                                        <FaPlus />
                                                     </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Tuesday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                    <button
-                                                        className="edit-time-slot-button"
-                                                        onClick={() => handleEditTimeSlot(timeSlot)}
-                                                        data-tooltip-id="main-tooltip"
-                                                        data-tooltip-content="Edit time slot"
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Wednesday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                        <button
-                                                            className="edit-time-slot-button"
-                                                            onClick={() => handleEditTimeSlot(timeSlot)}
-                                                            data-tooltip-id="main-tooltip"
-                                                            data-tooltip-content="Edit time slot"
-                                                        >
-                                                            <FaEdit />
-                                                        </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Thursday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                        <button
-                                                            className="edit-time-slot-button"
-                                                            onClick={() => handleEditTimeSlot(timeSlot)}
-                                                            data-tooltip-id="main-tooltip"
-                                                            data-tooltip-content="Edit time slot"
-                                                        >
-                                                            <FaEdit />
-                                                        </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Friday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                        <button
-                                                            className="edit-time-slot-button"
-                                                            onClick={() => handleEditTimeSlot(timeSlot)}
-                                                            data-tooltip-id="main-tooltip"
-                                                            data-tooltip-content="Edit time slot"
-                                                        >
-                                                            <FaEdit />
-                                                        </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Saturday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                        <button
-                                                            className="edit-time-slot-button"
-                                                            onClick={() => handleEditTimeSlot(timeSlot)}
-                                                            data-tooltip-id="main-tooltip"
-                                                            data-tooltip-content="Edit time slot"
-                                                        >
-                                                            <FaEdit />
-                                                        </button>
-                                                </div>
-                                            ))}
-                                    </td>
-                                    <td className="time-slot-cell">
-                                        {observer.timeslots && observer.timeslots
-                                            .filter(ts => ts.day === 'Sunday')
-                                            .map(timeSlot => (
-                                                <div key={timeSlot.TimeSlotID} className="time-slot">
-                                                    <span>{timeSlot.startTime ? timeSlot.startTime.slice(0, 5) : '--:--'}-{timeSlot.endTime ? timeSlot.endTime.slice(0, 5) : '--:--'}</span>
-                                                    <button
-                                                        className="edit-time-slot-button"
-                                                        onClick={() => handleEditTimeSlot(timeSlot)}
-                                                        data-tooltip-id="main-tooltip"
-                                                        data-tooltip-content="Edit time slot"
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                    </td>
+                                                </>
+                                            )}
+                                        </td>
+                                    ))}
                                     <td>
                                         <button
                                             className="edit-button"
@@ -456,6 +354,7 @@ const ManageObservers = () => {
                             ))}
                         </tbody>
                     </table>
+                    
                 </div>
             )}
 
@@ -497,6 +396,18 @@ const ManageObservers = () => {
                     onDelete={handleDeleteTimeSlot}
                 />
             )}
+            {isAddingTimeSlot && (
+                <AddTimeSlotModal
+                    observerID={selectedObserverID}
+                    day={selectedDay}
+                    onClose={handleCloseAddTimeSlotModal}
+                    onSave={handleSaveNewTimeSlot}
+                />
+            )}
+            <SuccessMessage
+                messages={successMessages}
+                onClose={handleCloseMessage}
+            />
         </div>
     );
 };

@@ -1,46 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import './CreateObserverModal.scss'; // Import the SCSS file for styling
 
 const CreateObserverModal = ({ onClose, onCreate }) => {
-  const [courseID, setCourseID] = useState(null); // State to hold the CourseID
-
-  useEffect(() => {
-    // Fetch the CourseID from the backend when the component mounts
-    const fetchCourseID = async () => {
-      try {
-        const response = await fetch('http://localhost:3000/api/courses/generateCourseID'); // Replace with your actual endpoint
-        const data = await response.json();
-        setCourseID(data.courseID); // Assuming the response contains a 'courseID' property
-      } catch (error) {
-        console.error('Error fetching CourseID:', error);
-        // Handle error appropriately (e.g., display an error message)
-      }
-    };
-
-    fetchCourseID();
-  }, []);
-
-  // Handle form submission and call onCreate
   const handleSubmit = (e) => {
     e.preventDefault();
 
+    // Validate form data
+    const form = e.target;
+    if (form.password.value !== form.confirmPassword.value) {
+      alert("Passwords don't match!");
+      return;
+    }
+
     // Prepare new observer data from the form
     const newObserver = {
-      name: e.target.name.value,
-      email: e.target.email.value,
-      password: e.target.password.value,
-      phoneNum: e.target.phoneNum.value,
-      title: e.target.title.value,
-      scientificRank: e.target.scientificRank.value,
-      fatherName: e.target.fatherName.value,
-      availability: e.target.availability.value,
-      courseID: courseID, // Use the fetched CourseID
+      name: form.name.value,
+      email: form.email.value,
+      password: form.password.value,
+      phonenum: form.phonenum.value,
+      title: form.title.value,
+      scientificRank: form.scientificRank.value,
+      fatherName: form.fatherName.value,
+      availability: form.availability.value,
     };
 
     // Call the onCreate function with the new data
     onCreate(newObserver);
-
-    // Close the modal after creating
     onClose();
   };
 
@@ -82,34 +67,58 @@ const CreateObserverModal = ({ onClose, onCreate }) => {
             />
           </div>
 
+          {/* Confirm Password */}
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirm Password:</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              required
+            />
+          </div>
+
           {/* Phone Number */}
           <div className="form-group">
-            <label htmlFor="phoneNum">Phone Number:</label>
+            <label htmlFor="phonenum">Phone Number:</label>
             <input
-              type="text"
-              id="phoneNum"
-              name="phoneNum"
+              type="tel"
+              id="phonenum"
+              name="phonenum"
+              required
             />
           </div>
 
           {/* Title */}
           <div className="form-group">
             <label htmlFor="title">Title:</label>
-            <input
-              type="text"
+            <select
               id="title"
               name="title"
-            />
+              required
+            >
+              <option value="">Select a title</option>
+              <option value="Dr.">Dr.</option>
+              <option value="Prof.">Prof.</option>
+              <option value="Assistant Prof.">Assistant Prof.</option>
+              <option value="Associate Prof.">Associate Prof.</option>
+            </select>
           </div>
 
           {/* Scientific Rank */}
           <div className="form-group">
             <label htmlFor="scientificRank">Scientific Rank:</label>
-            <input
-              type="text"
+            <select
               id="scientificRank"
               name="scientificRank"
-            />
+              required
+            >
+              <option value="">Select a rank</option>
+              <option value="Professor">Professor</option>
+              <option value="Associate Professor">Associate Professor</option>
+              <option value="Assistant Professor">Assistant Professor</option>
+              <option value="Lecturer">Lecturer</option>
+            </select>
           </div>
 
           {/* Father Name */}
@@ -119,6 +128,7 @@ const CreateObserverModal = ({ onClose, onCreate }) => {
               type="text"
               id="fatherName"
               name="fatherName"
+              required
             />
           </div>
 
@@ -128,26 +138,23 @@ const CreateObserverModal = ({ onClose, onCreate }) => {
             <select
               id="availability"
               name="availability"
+              required
             >
+              <option value="">Select availability</option>
               <option value="full-time">Full time</option>
               <option value="part-time">Part time</option>
             </select>
           </div>
 
-          {/* Course ID (Hidden) */}
-          <input
-            type="hidden"
-            name="courseID"
-            value={courseID || ''} // Use the fetched CourseID
-          />
-
-          {/* Submit Button */}
-          <button type="submit" className="save-button">
-            <i className="fas fa-plus"></i> Create
-          </button>
-          <button type="button" className="cancel-button" onClick={onClose}>
-            <i className="fas fa-times"></i> Cancel
-          </button>
+          {/* Submit and Cancel Buttons */}
+          <div className="button-group">
+            <button type="submit" className="save-button">
+              <i className="fas fa-plus"></i> Create
+            </button>
+            <button type="button" className="cancel-button" onClick={onClose}>
+              <i className="fas fa-times"></i> Cancel
+            </button>
+          </div>
         </form>
       </div>
     </div>
