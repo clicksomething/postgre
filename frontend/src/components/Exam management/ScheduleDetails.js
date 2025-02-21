@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUserTie } from 'react-icons/fa';
+import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUserTie, FaEdit } from 'react-icons/fa';
 import axios from 'axios';
+import EditExamModal from './Modals/EditExamModal';
 import './ScheduleDetails.scss';
 
 const ScheduleDetails = ({ schedule, onBack }) => {
     const [examDetails, setExamDetails] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [selectedExam, setSelectedExam] = useState(null);
+    const [showEditModal, setShowEditModal] = useState(false);
 
     useEffect(() => {
         if (schedule?.uploadId) {
@@ -92,6 +95,7 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                                     <th>Head Observer</th>
                                     <th>Secretary</th>
                                     <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -126,6 +130,17 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                                                 {exam.status}
                                             </span>
                                         </td>
+                                        <td>
+                                            <button 
+                                                className="edit-button"
+                                                onClick={() => {
+                                                    setSelectedExam(exam);
+                                                    setShowEditModal(true);
+                                                }}
+                                            >
+                                                <FaEdit /> Edit
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -133,6 +148,21 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                     </div>
                 )}
             </div>
+
+            {showEditModal && (
+                <EditExamModal
+                    exam={selectedExam}
+                    onClose={() => {
+                        setShowEditModal(false);
+                        setSelectedExam(null);
+                    }}
+                    onUpdate={() => {
+                        setShowEditModal(false);
+                        setSelectedExam(null);
+                        fetchExamDetails(schedule.uploadId);
+                    }}
+                />
+            )}
         </div>
     );
 };

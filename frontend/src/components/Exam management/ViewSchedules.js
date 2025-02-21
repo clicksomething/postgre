@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FaSearch, FaEdit, FaTrash, FaSpinner, FaEye } from 'react-icons/fa';
+import EditScheduleModal from './Modals/EditScheduleModal';
 import './ViewSchedules.scss';
 
 const ViewSchedules = ({ onScheduleSelect }) => {
@@ -8,7 +9,9 @@ const ViewSchedules = ({ onScheduleSelect }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedSchedule, setSelectedSchedule] = useState(null);
+    
     useEffect(() => {
         fetchSchedules();
     }, []);
@@ -30,7 +33,10 @@ const ViewSchedules = ({ onScheduleSelect }) => {
     const handleDelete = async (scheduleId) => {
         if (window.confirm('Are you sure you want to delete this schedule?')) {
             try {
-                await axios.delete(`http://localhost:3000/api/exams/schedules/${scheduleId}`);
+                const token = localStorage.getItem('authToken');
+                await axios.delete(`http://localhost:3000/api/exams/schedules/${scheduleId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 await fetchSchedules();
             } catch (err) {
                 setError(err.response?.data?.message || 'Error deleting schedule');
@@ -47,6 +53,17 @@ const ViewSchedules = ({ onScheduleSelect }) => {
         }
     };
 
+    const handleEdit = (schedule) => {
+        setSelectedSchedule(schedule.scheduleInfo);
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateSuccess = async () => {
+        await fetchSchedules();
+        setIsEditModalOpen(false);
+        setSelectedSchedule(null);
+    };
+    
     const filteredSchedules = schedules.filter(schedule => 
         schedule.scheduleInfo.fileName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         schedule.scheduleInfo.academicYear?.toString().includes(searchTerm) ||
@@ -108,6 +125,12 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                                         <FaEye /> View
                                     </button>
                                     <button 
+                                        className="edit-button"
+                                        onClick={() => handleEdit(schedule)}
+                                    >
+                                        <FaEdit /> Edit
+                                    </button>
+                                    <button 
                                         className="delete-button"
                                         onClick={() => handleDelete(schedule.scheduleInfo.uploadId)}
                                     >
@@ -125,8 +148,19 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                     {error}
                 </div>
             )}
+
+            {isEditModalOpen && selectedSchedule && (
+                <EditScheduleModal
+                    schedule={selectedSchedule}
+                    onClose={() => {
+                        setIsEditModalOpen(false);
+                        setSelectedSchedule(null);
+                    }}
+                    onUpdate={handleUpdateSuccess}
+                />
+            )}
         </div>
     );
 };
 
-export default ViewSchedules; 
+export default ViewSchedules;

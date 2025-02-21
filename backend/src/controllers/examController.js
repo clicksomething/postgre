@@ -269,93 +269,154 @@ const getExamById = async (req, res) => {
     }
 };
 
+const checkExamConflicts = async (examId, roomId, examDate, startTime, endTime) => {
+    // Query to find any overlapping exams in the same room on the same day
+    const result = await client.query(
+        `SELECT 
+            e.ExamID,
+            e.ExamName,
+            e.StartTime,
+            e.EndTime,
+            c.CourseName
+         FROM ExamSchedule e
+         JOIN Course c ON e.CourseID = c.CourseID
+         WHERE e.ExamID != $1  -- Exclude current exam
+         AND e.RoomID = $2     -- Same room
+         AND e.ExamDate = $3   -- Same date
+         AND (
+             -- Case 1: New exam starts during an existing exam
+             (e.StartTime <= $4 AND e.EndTime > $4)
+             OR
+             -- Case 2: New exam ends during an existing exam
+             (e.StartTime < $5 AND e.EndTime >= $5)
+             OR
+             -- Case 3: New exam completely contains an existing exam
+             ($4 <= e.StartTime AND $5 >= e.EndTime)
+             OR
+             -- Case 4: New exam is completely contained within an existing exam
+             ($4 >= e.StartTime AND $5 <= e.EndTime)
+         )`,
+        [examId, roomId, examDate, startTime, endTime]
+    );
+
+    return result.rows;
+};
+
 const updateExam = async (req, res) => {
     try {
-        const examId = parseInt(req.params.examId); // Changed from id to examId to match route
-        console.log('Attempting to update exam with ID:', examId);
-        console.log('Update data:', req.body);
+        const examId = parseInt(req.params.examId);
+        let { 
+            courseName, 
+            roomNum, 
+            roomCapacity,
+            examName, 
+            examDate, 
+            startTime, 
+            endTime, 
+            numOfStudents 
+        } = req.body;
 
-        // Check if exam exists first
+        // Ensure we only have HH:mm format
+        startTime = startTime.split(':').slice(0, 2).join(':');
+        endTime = endTime.split(':').slice(0, 2).join(':');
+
+        // Validate time format (HH:mm)
+        const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timePattern.test(startTime) || !timePattern.test(endTime)) {
+            return res.status(400).json({ 
+                message: "Invalid time format. Use HH:mm format" 
+            });
+        }
+
+        // Start transaction
+        await client.query('BEGIN');
+
+        // Check if exam exists
         const examCheck = await client.query(
             'SELECT * FROM ExamSchedule WHERE ExamID = $1',
             [examId]
         );
 
-        console.log('Exam check result:', examCheck.rows);
-
         if (examCheck.rows.length === 0) {
-            console.log('No exam found with ID:', examId);
-            return res.status(404).json({
-                message: "Exam not found"
-            });
-        }
-
-        const { courseId, roomId, examName, examDate, startTime, endTime, numOfStudents } = req.body;
-
-        // Start building the query
-        let query = `UPDATE ExamSchedule SET `;
-        const values = [];
-        let index = 1;
-        let fieldsProvided = false;
-
-        // Check which fields are provided and build the query
-        if (courseId) {
-            query += `CourseID = $${index++}, `;
-            values.push(courseId);
-            fieldsProvided = true;
-        }
-        if (roomId) {
-            query += `RoomID = $${index++}, `;
-            values.push(roomId);
-            fieldsProvided = true;
-        }
-        if (examName) {
-            query += `ExamName = $${index++}, `;
-            values.push(examName);
-            fieldsProvided = true;
-        }
-        if (startTime) {
-            query += `StartTime = $${index++}, `;
-            values.push(startTime);
-            fieldsProvided = true;
-        }
-        if (endTime) {
-            query += `EndTime = $${index++}, `;
-            values.push(endTime);
-            fieldsProvided = true;
-        }
-        if (numOfStudents) {
-            query += `NumOfStudents = $${index++}, `;
-            values.push(numOfStudents);
-            fieldsProvided = true;
-        }
-        if (examDate) {
-            query += `ExamDate = $${index++}, `;
-            values.push(examDate);
-            fieldsProvided = true;
-        }
-
-        // If no fields were provided, return an error
-        if (!fieldsProvided) {
-            return res.status(400).json({ message: "No fields provided for update" });
-        }
-
-        // Remove the last comma and space
-        query = query.slice(0, -2);
-        query += ` WHERE ExamID = $${index} RETURNING *`;
-        values.push(examId);
-
-        console.log('Final query:', query);
-        console.log('Query values:', values);
-
-        const result = await client.query(query, values);
-
-        if (result.rows.length === 0) {
+            await client.query('ROLLBACK');
             return res.status(404).json({ message: "Exam not found" });
         }
 
-        res.json({ message: "Exam updated successfully", exam: result.rows[0] });
+        // Get or create course and room
+        const courseId = await getOrCreateCourse(client, courseName);
+        const roomId = await getOrCreateRoom(client, roomNum, roomCapacity);
+
+        // Check for time conflicts
+        const conflicts = await checkExamConflicts(
+            examId,
+            roomId,
+            examDate,
+            startTime,
+            endTime
+        );
+
+        if (conflicts.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                message: "Time slot conflict detected",
+                conflicts: conflicts.map(c => ({
+                    examName: c.examname,
+                    courseName: c.coursename,
+                    startTime: c.starttime,
+                    endTime: c.endtime
+                }))
+            });
+        }
+
+        // Update the exam
+        const result = await client.query(
+            `UPDATE ExamSchedule 
+             SET CourseID = $1,
+                 RoomID = $2,
+                 ExamName = $3,
+                 ExamDate = $4,
+                 StartTime = $5,
+                 EndTime = $6,
+                 NumOfStudents = $7
+             WHERE ExamID = $8
+             RETURNING *`,
+            [courseId, roomId, examName, examDate, startTime, endTime, numOfStudents, examId]
+        );
+
+        // Get updated exam details with related information
+        const updatedExam = await client.query(
+            `SELECT 
+                e.*,
+                c.CourseName,
+                r.RoomNum,
+                r.SeatingCapacity
+             FROM ExamSchedule e
+             JOIN Course c ON e.CourseID = c.CourseID
+             JOIN Room r ON e.RoomID = r.RoomID
+             WHERE e.ExamID = $1`,
+            [examId]
+        );
+
+        await client.query('COMMIT');
+
+        res.json({
+            message: "Exam updated successfully",
+            exam: {
+                ...updatedExam.rows[0],
+                course: {
+                    id: updatedExam.rows[0].courseid,
+                    name: updatedExam.rows[0].coursename
+                },
+                room: {
+                    id: updatedExam.rows[0].roomid,
+                    number: updatedExam.rows[0].roomnum,
+                    capacity: updatedExam.rows[0].seatingcapacity
+                }
+            }
+        });
+
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('Error updating exam:', error);
         res.status(500).json({ 
             message: "Error updating exam", 
@@ -782,12 +843,162 @@ const getScheduleDetails = async (req, res) => {
     }
 };
 
+const checkScheduleUpdate = async (req, res) => {
+    try {
+        const scheduleId = parseInt(req.params.scheduleId);
+        const { academicYear } = req.body;
+
+        // Get the current academic year from the schedule
+        const currentSchedule = await client.query(
+            `SELECT AcademicYear 
+             FROM UploadedSchedules 
+             WHERE UploadID = $1`,
+            [scheduleId]
+        );
+
+        if (currentSchedule.rows.length === 0) {
+            return res.status(404).json({ message: "Schedule not found" });
+        }
+
+        // Compare years to see if there's a change
+        const currentYear = currentSchedule.rows[0].academicyear.split('-')[0];
+        const newYear = academicYear.split('-')[0];
+        const yearChanged = currentYear !== newYear;
+
+        // Only get affected exams if the year is actually changing
+        if (yearChanged) {
+            const affectedExams = await client.query(
+                `SELECT 
+                    e.ExamID, 
+                    e.ExamName, 
+                    TO_CHAR(e.ExamDate, 'YYYY-MM-DD') as ExamDate,
+                    c.CourseName,
+                    CASE 
+                        WHEN EXTRACT(MONTH FROM e.ExamDate) = 2 
+                        AND EXTRACT(DAY FROM e.ExamDate) = 29 
+                        THEN true 
+                        ELSE false 
+                    END as isLeapYearDate
+                 FROM ExamSchedule e
+                 JOIN Course c ON e.CourseID = c.CourseID
+                 WHERE e.ScheduleID = $1`,
+                [scheduleId]
+            );
+
+            const hasLeapYearDates = affectedExams.rows.some(exam => exam.isleapyeardate);
+
+            if (affectedExams.rows.length > 0) {
+                res.json({
+                    requiresConfirmation: true,
+                    affectedExams: affectedExams.rows,
+                    hasLeapYearDates,
+                    yearChanged,
+                    message: "This update will affect existing exams"
+                });
+                return;
+            }
+        }
+
+        // If year hasn't changed or no exams found
+        res.json({
+            requiresConfirmation: false,
+            yearChanged,
+            message: "No exams will be affected"
+        });
+
+    } catch (error) {
+        console.error('Error checking schedule update:', error);
+        res.status(500).json({ 
+            message: "Error checking schedule update", 
+            error: error.message 
+        });
+    }
+};
+
+const updateSchedule = async (req, res) => {
+    try {
+        const scheduleId = parseInt(req.params.scheduleId);
+        const { academicYear, semester, examType, updateExams } = req.body;
+
+        // Validate input
+        if (!academicYear || !semester || !examType) {
+            return res.status(400).json({ 
+                message: "Academic year, semester, and exam type are required" 
+            });
+        }
+
+        // Start a transaction
+        await client.query('BEGIN');
+
+        // Get current academic year from the schedule
+        const currentScheduleResult = await client.query(
+            `SELECT AcademicYear 
+             FROM UploadedSchedules 
+             WHERE UploadID = $1`,
+            [scheduleId]
+        );
+
+        if (currentScheduleResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: "Schedule not found" });
+        }
+
+        // Update the schedule
+        const scheduleResult = await client.query(
+            `UPDATE UploadedSchedules 
+             SET AcademicYear = $1, 
+                 Semester = $2::semester_type, 
+                 ExamType = $3::exam_type
+             WHERE UploadID = $4
+             RETURNING *`,
+            [academicYear, semester, examType, scheduleId]
+        );
+
+        // If user chose to update exam dates
+        if (updateExams) {
+            // Extract years from academic years (e.g., "2023-2024" -> "2023")
+            const currentYear = currentScheduleResult.rows[0].academicyear.split('-')[0];
+            const newYear = academicYear.split('-')[0];
+            
+            // Calculate year difference
+            const yearDifference = parseInt(newYear) - parseInt(currentYear);
+            
+            // Update all exam dates for this schedule
+            if (yearDifference !== 0) {
+                await client.query(
+                    `UPDATE ExamSchedule 
+                     SET ExamDate = ExamDate + (INTERVAL '1 year' * $1)
+                     WHERE ScheduleID = $2`,
+                    [yearDifference, scheduleId]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+
+        res.json({
+            message: "Schedule updated successfully",
+            schedule: scheduleResult.rows[0]
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error updating schedule:', error);
+        res.status(500).json({ 
+            message: "Error updating schedule", 
+            error: error.message 
+        });
+    }
+};
+
 // Make sure the exports include ALL functions
 module.exports = {
     uploadExamSchedule,
     getSchedules,
     getScheduleDetails,
-    updateExam,         // This was missing or undefined
+    updateExam,
     deleteExam,
-    deleteSchedule
+    deleteSchedule,
+    updateSchedule,
+    checkScheduleUpdate
 };
