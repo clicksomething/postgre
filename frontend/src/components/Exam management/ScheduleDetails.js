@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUserTie, FaEdit } from 'react-icons/fa';
+import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUserTie, FaEdit, FaTrash, FaSearch, FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import axios from 'axios';
 import EditExamModal from './Modals/EditExamModal';
+import DeleteExamModal from './Modals/DeleteExamModal';
 import './ScheduleDetails.scss';
 
 const ScheduleDetails = ({ schedule, onBack }) => {
@@ -10,6 +11,14 @@ const ScheduleDetails = ({ schedule, onBack }) => {
     const [error, setError] = useState(null);
     const [selectedExam, setSelectedExam] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    
+    // New states for search and sort
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortConfig, setSortConfig] = useState({
+        key: null,
+        direction: 'ascending'
+    });
 
     useEffect(() => {
         if (schedule?.uploadId) {
@@ -31,6 +40,13 @@ const ScheduleDetails = ({ schedule, onBack }) => {
         }
     };
 
+    const handleExamDeleted = (deletedExamId) => {
+        setExamDetails(prev => ({
+            ...prev,
+            exams: prev.exams.filter(exam => exam.examId !== deletedExamId)
+        }));
+    };
+
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
             weekday: 'long',
@@ -46,6 +62,66 @@ const ScheduleDetails = ({ schedule, onBack }) => {
             hour: '2-digit',
             minute: '2-digit'
         });
+    };
+
+    // Sorting function
+    const sortData = (data, key, direction) => {
+        return [...data].sort((a, b) => {
+            let aValue = key.split('.').reduce((obj, k) => obj?.[k], a);
+            let bValue = key.split('.').reduce((obj, k) => obj?.[k], b);
+
+            // Handle special cases
+            if (key === 'examDate') {
+                return direction === 'ascending' 
+                    ? new Date(aValue) - new Date(bValue)
+                    : new Date(bValue) - new Date(aValue);
+            }
+
+            if (typeof aValue === 'string') {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+
+            if (aValue < bValue) return direction === 'ascending' ? -1 : 1;
+            if (aValue > bValue) return direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    // Handle sort click
+    const handleSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    // Get sort icon
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) return <FaSort />;
+        return sortConfig.direction === 'ascending' ? <FaSortUp /> : <FaSortDown />;
+    };
+
+    // Filter and sort exams
+    const getFilteredAndSortedExams = () => {
+        if (!examDetails?.exams) return [];
+
+        let filteredExams = examDetails.exams.filter(exam => {
+            const searchString = searchTerm.toLowerCase();
+            return (
+                exam.examName.toLowerCase().includes(searchString) ||
+                exam.course.name.toLowerCase().includes(searchString) ||
+                exam.room.number.toLowerCase().includes(searchString) ||
+                formatDate(exam.examDate).toLowerCase().includes(searchString)
+            );
+        });
+
+        if (sortConfig.key) {
+            filteredExams = sortData(filteredExams, sortConfig.key, sortConfig.direction);
+        }
+
+        return filteredExams;
     };
 
     if (!schedule) {
@@ -78,6 +154,18 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                 </div>
             </div>
 
+            <div className="search-bar">
+                <div className="search-input-wrapper">
+                    <FaSearch className="search-icon" />
+                    <input
+                        type="text"
+                        placeholder="Search exams..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+            </div>
+
             <div className="details-content">
                 {examDetails.exams.length === 0 ? (
                     <div className="no-data">No exams found for this schedule.</div>
@@ -86,34 +174,64 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                         <table className="exams-table">
                             <thead>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Time</th>
-                                    <th>Course</th>
-                                    <th>Exam Name</th>
-                                    <th>Room</th>
-                                    <th>Students</th>
-                                    <th>Head Observer</th>
+                                    <th onClick={() => handleSort('examDate')} className="sortable">
+                                        Date {getSortIcon('examDate')}
+                                    </th>
+                                    <th onClick={() => handleSort('startTime')} className="sortable">
+                                        Time {getSortIcon('startTime')}
+                                    </th>
+                                    <th onClick={() => handleSort('course.name')} className="sortable">
+                                        Course {getSortIcon('course.name')}
+                                    </th>
+                                    <th onClick={() => handleSort('examName')} className="sortable">
+                                        Exam Name {getSortIcon('examName')}
+                                    </th>
+                                    <th onClick={() => handleSort('room.number')} className="sortable">
+                                        Room {getSortIcon('room.number')}
+                                    </th>
+                                    <th onClick={() => handleSort('numOfStudents')} className="sortable">
+                                        Students {getSortIcon('numOfStudents')}
+                                    </th>
+                                    <th>Head</th>
                                     <th>Secretary</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
+                                    <th onClick={() => handleSort('status')} className="sortable">
+                                        Status {getSortIcon('status')}
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {examDetails.exams.map((exam) => (
-                                    <tr key={exam.examId}>
+                                {getFilteredAndSortedExams().map((exam) => (
+                                    <tr key={exam.examId} className="exam-row">
                                         <td>{formatDate(exam.examDate)}</td>
                                         <td>
                                             {formatTime(exam.startTime)} - {formatTime(exam.endTime)}
                                         </td>
-                                        <td>
-                                            <div className="course-name">{exam.course.name}</div>
-                                            {exam.course.department && (
-                                                <div className="department-name">
-                                                    {exam.course.department}
-                                                </div>
-                                            )}
+                                        <td className="course-cell">
+                                            {exam.course.name}
+                                            <div className="row-actions">
+                                                <button
+                                                    className="edit-button"
+                                                    onClick={() => {
+                                                        setSelectedExam(exam);
+                                                        setShowEditModal(true);
+                                                    }}
+                                                    data-tooltip="Edit Exam"
+                                                >
+                                                    <FaEdit />
+                                                </button>
+                                                <button
+                                                    className="delete-button"
+                                                    onClick={() => {
+                                                        setSelectedExam(exam);
+                                                        setShowDeleteModal(true);
+                                                    }}
+                                                    data-tooltip="Delete Exam"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </div>
                                         </td>
-                                        <td>{exam.examName}</td>
+                                        <td className="exam-name-cell">{exam.examName}</td>
                                         <td>
                                             <div className="room-info">
                                                 {exam.room.number}
@@ -129,17 +247,6 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                                             <span className={`status-badge ${exam.status}`}>
                                                 {exam.status}
                                             </span>
-                                        </td>
-                                        <td>
-                                            <button 
-                                                className="edit-button"
-                                                onClick={() => {
-                                                    setSelectedExam(exam);
-                                                    setShowEditModal(true);
-                                                }}
-                                            >
-                                                <FaEdit /> Edit
-                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -161,6 +268,17 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                         setSelectedExam(null);
                         fetchExamDetails(schedule.uploadId);
                     }}
+                />
+            )}
+
+            {showDeleteModal && (
+                <DeleteExamModal
+                    exam={selectedExam}
+                    onClose={() => {
+                        setShowDeleteModal(false);
+                        setSelectedExam(null);
+                    }}
+                    onDelete={handleExamDeleted}
                 />
             )}
         </div>
