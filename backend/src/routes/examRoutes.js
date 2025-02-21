@@ -13,10 +13,21 @@ router.post('/upload',
     handleUploadError,                 // Handle any upload errors
     examController.uploadExamSchedule   // Finally process the upload
 );
+
+// Add the check route before the update route
+router.post('/schedules/:scheduleId/check',
+    authenticateToken,
+    examController.checkScheduleUpdate
+);
+
+router.put('/schedules/:scheduleId',
+    authenticateToken,
+    examController.updateSchedule
+);
+
 router.put('/:examId', examController.updateExam);  // Using updateExam instead of editExam
 router.delete('/:examId', examController.deleteExam);
 router.delete('/schedules/:scheduleId', examController.deleteSchedule);
-
 
 module.exports = router;
 
