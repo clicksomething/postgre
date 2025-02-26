@@ -75,12 +75,19 @@ const EditExamModal = ({ exam, onClose, onUpdate }) => {
         e.preventDefault();
         if (!validateForm()) return;
 
+        const token = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+        
+        if (!token || userRole !== 'admin') {
+            setError('Only administrators can edit exams');
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setConflicts(null);
 
         try {
-            const token = localStorage.getItem('authToken');
             const response = await axios.put(
                 `http://localhost:3000/api/exams/${exam.examId}`,
                 formData,

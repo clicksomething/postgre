@@ -1,0 +1,107 @@
+@import '../../../styles/modal';
+
+.assign-observers-modal {
+    @include modal-base;
+
+    .modal-content {
+        @include modal-content;
+        max-width: 600px; // Slightly wider for the observers list
+
+        .close-button {
+            @include modal-close-button;
+        }
+
+        h2 {
+            @include modal-title;
+        }
+
+        .exam-details {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+
+            p {
+                margin: 8px 0;
+                color: #495057;
+
+                strong {
+                    color: #343a40;
+                    margin-right: 8px;
+                }
+            }
+        }
+
+        .observers-list {
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+
+            h3 {
+                color: #343a40;
+                margin-bottom: 15px;
+                font-size: 1.2rem;
+            }
+
+            .observer-item {
+                background-color: white;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 10px;
+                border: 1px solid #e9ecef;
+                transition: all 0.2s ease;
+
+                &:hover {
+                    border-color: #80bdff;
+                    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+                }
+
+                .observer-info {
+                    .name {
+                        font-weight: 600;
+                        color: #343a40;
+                        margin-bottom: 4px;
+                    }
+
+                    .rank {
+                        color: #6c757d;
+                        font-size: 0.9rem;
+                        margin-bottom: 4px;
+                    }
+
+                    .workload {
+                        color: #495057;
+                        font-size: 0.9rem;
+                        padding: 4px 8px;
+                        background-color: #e9ecef;
+                        border-radius: 4px;
+                        display: inline-block;
+                    }
+                }
+            }
+        }
+
+        .loading, .error {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .loading {
+            color: #6c757d;
+            background-color: #f8f9fa;
+        }
+
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+
+        .buttons {
+            @include modal-buttons;
+        }
+    }
+} 

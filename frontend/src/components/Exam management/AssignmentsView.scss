@@ -1,0 +1,110 @@
+.assignments-view {
+    padding: 20px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+    .search-section {
+        margin-bottom: 20px;
+
+        .search-bar {
+            position: relative;
+            max-width: 500px;
+
+            .search-icon {
+                position: absolute;
+                left: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #6c757d;
+            }
+
+            input {
+                width: 100%;
+                padding: 12px 40px;
+                border: 1px solid #ced4da;
+                border-radius: 8px;
+                font-size: 1rem;
+
+                &:focus {
+                    outline: none;
+                    border-color: #80bdff;
+                    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+                }
+            }
+
+            .clear-search {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+
+                &:hover {
+                    color: #343a40;
+                }
+            }
+        }
+    }
+
+    .assignments-table-container {
+        overflow-x: auto;
+
+        .assignments-table {
+            width: 100%;
+            border-collapse: collapse;
+            
+            th, td {
+                padding: 12px 16px;
+                text-align: left;
+                border-bottom: 1px solid #e9ecef;
+            }
+
+            th {
+                background-color: #f8f9fa;
+                color: #495057;
+                font-weight: 600;
+            }
+
+            tr:hover {
+                background-color: #f8f9fa;
+            }
+
+            .status-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.875rem;
+
+                &.assigned {
+                    background-color: #d4edda;
+                    color: #155724;
+                }
+
+                &.unassigned {
+                    background-color: #fff3cd;
+                    color: #856404;
+                }
+
+                svg {
+                    font-size: 0.75rem;
+                }
+            }
+        }
+    }
+
+    .loading, .error {
+        text-align: center;
+        padding: 40px;
+        color: #6c757d;
+    }
+
+    .error {
+        color: #dc3545;
+    }
+} 

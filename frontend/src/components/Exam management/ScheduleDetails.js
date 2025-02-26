@@ -4,47 +4,64 @@ import axios from 'axios';
 import EditExamModal from './Modals/EditExamModal';
 import DeleteExamModal from './Modals/DeleteExamModal';
 import './ScheduleDetails.scss';
+import { useParams } from 'react-router-dom';
 
-const ScheduleDetails = ({ schedule, onBack }) => {
+const ScheduleDetails = () => {
+    const { id: uploadId } = useParams(); // Get the uploadId from the URL params
+    console.log('Upload ID from URL:', uploadId); // Log the ID
     const [examDetails, setExamDetails] = useState(null);
+    const [exams, setExams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedExam, setSelectedExam] = useState(null);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    
-    // New states for search and sort
     const [searchTerm, setSearchTerm] = useState('');
-    const [sortConfig, setSortConfig] = useState({
-        key: null,
-        direction: 'ascending'
-    });
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
     useEffect(() => {
-        if (schedule?.uploadId) {
-            fetchExamDetails(schedule.uploadId);
+        if (uploadId) {
+            console.log('Fetching exam details for uploadId:', uploadId);
+            fetchExamDetails(uploadId);
         }
-    }, [schedule]);
+    }, [uploadId]);
 
     const fetchExamDetails = async (scheduleId) => {
         try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                setError('Please log in to view details');
+                return;
+            }
+
             setLoading(true);
-            const response = await axios.get(`http://localhost:3000/api/exams/schedules/${scheduleId}`);
-            setExamDetails(response.data.schedule);
-            setError(null);
+            const response = await axios.get(`http://localhost:3000/api/exams/schedules/${scheduleId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log('Backend Response:', response.data); // Log the response
+
+            // Set the schedule details correctly
+            if (response.data && response.data.schedule) {
+                setExamDetails(response.data.schedule); // Set the entire schedule object
+                setExams(response.data.schedule.exams); // Set the associated exams
+                setError(null);
+            } else {
+                setError('No schedule data found');
+            }
         } catch (err) {
             console.error('Error fetching exam details:', err);
-            setError('Failed to load exam details');
+            setError('Failed to fetch exam details');
         } finally {
             setLoading(false);
         }
     };
 
     const handleExamDeleted = (deletedExamId) => {
-        setExamDetails(prev => ({
-            ...prev,
-            exams: prev.exams.filter(exam => exam.examId !== deletedExamId)
-        }));
+        setExams(prev => prev.filter(exam => exam.examId !== deletedExamId));
     };
 
     const formatDate = (dateString) => {
@@ -64,13 +81,11 @@ const ScheduleDetails = ({ schedule, onBack }) => {
         });
     };
 
-    // Sorting function
     const sortData = (data, key, direction) => {
         return [...data].sort((a, b) => {
             let aValue = key.split('.').reduce((obj, k) => obj?.[k], a);
             let bValue = key.split('.').reduce((obj, k) => obj?.[k], b);
 
-            // Handle special cases
             if (key === 'examDate') {
                 return direction === 'ascending' 
                     ? new Date(aValue) - new Date(bValue)
@@ -88,7 +103,6 @@ const ScheduleDetails = ({ schedule, onBack }) => {
         });
     };
 
-    // Handle sort click
     const handleSort = (key) => {
         let direction = 'ascending';
         if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -97,17 +111,15 @@ const ScheduleDetails = ({ schedule, onBack }) => {
         setSortConfig({ key, direction });
     };
 
-    // Get sort icon
     const getSortIcon = (columnKey) => {
         if (sortConfig.key !== columnKey) return <FaSort />;
         return sortConfig.direction === 'ascending' ? <FaSortUp /> : <FaSortDown />;
     };
 
-    // Filter and sort exams
     const getFilteredAndSortedExams = () => {
-        if (!examDetails?.exams) return [];
+        if (!exams) return [];
 
-        let filteredExams = examDetails.exams.filter(exam => {
+        let filteredExams = exams.filter(exam => {
             const searchString = searchTerm.toLowerCase();
             return (
                 exam.examName.toLowerCase().includes(searchString) ||
@@ -124,33 +136,52 @@ const ScheduleDetails = ({ schedule, onBack }) => {
         return filteredExams;
     };
 
-    if (!schedule) {
-        return <div className="no-data">No schedule selected</div>;
-    }
+    const handleEditClick = (exam) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            alert('Please log in to edit exams');
+            return;
+        }
+        setSelectedExam(exam);
+        setShowEditModal(true);
+    };
 
-    if (loading) {
-        return <div className="loading">Loading exam details...</div>;
-    }
-
-    if (error) {
-        return <div className="error">{error}</div>;
-    }
+    const handleDeleteClick = (exam) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            alert('Please log in to delete exams');
+            return;
+        }
+        setSelectedExam(exam);
+        setShowDeleteModal(true);
+    };
 
     if (!examDetails) {
-        return <div className="no-data">No exam details available</div>;
+        return <div className="no-data">No schedule information available</div>;
     }
 
     return (
         <div className="schedule-details">
             <div className="details-header">
-                <button className="back-button" onClick={onBack}>
+                <button className="back-button" onClick={() => window.history.back()}>
                     <FaArrowLeft /> Back to Schedules
                 </button>
-                <h2>{examDetails.scheduleInfo.fileName}</h2>
-                <div className="schedule-meta">
-                    <span>Academic Year: {examDetails.scheduleInfo.academicYear}</span>
-                    <span>Semester: {examDetails.scheduleInfo.semester}</span>
-                    <span>Type: {examDetails.scheduleInfo.examType}</span>
+                <div className="schedule-info">
+                    <h2>{examDetails.scheduleInfo?.fileName || 'No Filename Available'}</h2>
+                    <div className="info-cards">
+                        <div className="info-card">
+                            <span className="label">Academic Year</span>
+                            <span className="value">{examDetails.scheduleInfo?.academicYear || 'N/A'}</span>
+                        </div>
+                        <div className="info-card">
+                            <span className="label">Semester</span>
+                            <span className="value">{examDetails.scheduleInfo?.semester || 'N/A'}</span>
+                        </div>
+                        <div className="info-card">
+                            <span className="label">Type</span>
+                            <span className="value">{examDetails.scheduleInfo?.examType || 'N/A'}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -167,7 +198,7 @@ const ScheduleDetails = ({ schedule, onBack }) => {
             </div>
 
             <div className="details-content">
-                {examDetails.exams.length === 0 ? (
+                {exams.length === 0 ? (
                     <div className="no-data">No exams found for this schedule.</div>
                 ) : (
                     <div className="table-responsive">
@@ -182,9 +213,6 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                                     </th>
                                     <th onClick={() => handleSort('course.name')} className="sortable">
                                         Course {getSortIcon('course.name')}
-                                    </th>
-                                    <th onClick={() => handleSort('examName')} className="sortable">
-                                        Exam Name {getSortIcon('examName')}
                                     </th>
                                     <th onClick={() => handleSort('room.number')} className="sortable">
                                         Room {getSortIcon('room.number')}
@@ -208,30 +236,25 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                                         </td>
                                         <td className="course-cell">
                                             {exam.course.name}
-                                            <div className="row-actions">
-                                                <button
-                                                    className="edit-button"
-                                                    onClick={() => {
-                                                        setSelectedExam(exam);
-                                                        setShowEditModal(true);
-                                                    }}
-                                                    data-tooltip="Edit Exam"
-                                                >
-                                                    <FaEdit />
-                                                </button>
-                                                <button
-                                                    className="delete-button"
-                                                    onClick={() => {
-                                                        setSelectedExam(exam);
-                                                        setShowDeleteModal(true);
-                                                    }}
-                                                    data-tooltip="Delete Exam"
-                                                >
-                                                    <FaTrash />
-                                                </button>
-                                            </div>
+                                            {                                            ['admin'].includes(localStorage.getItem('userRole')) && (
+                                                <div className="row-actions">
+                                                    <button
+                                                        className="edit-button"
+                                                        onClick={() => handleEditClick(exam)}
+                                                        data-tooltip="Edit Exam"
+                                                    >
+                                                        <FaEdit />
+                                                    </button>
+                                                    <button
+                                                        className="delete-button"
+                                                        onClick={() => handleDeleteClick(exam)}
+                                                        data-tooltip="Delete Exam"
+                                                    >
+                                                        <FaTrash />
+                                                    </button>
+                                                </div>
+                                            )}
                                         </td>
-                                        <td className="exam-name-cell">{exam.examName}</td>
                                         <td>
                                             <div className="room-info">
                                                 {exam.room.number}
@@ -266,7 +289,7 @@ const ScheduleDetails = ({ schedule, onBack }) => {
                     onUpdate={() => {
                         setShowEditModal(false);
                         setSelectedExam(null);
-                        fetchExamDetails(schedule.uploadId);
+                        fetchExamDetails(uploadId);
                     }}
                 />
             )}

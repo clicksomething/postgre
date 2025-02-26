@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import './EditUserModal.scss';
+import { FaSave, FaTimes } from 'react-icons/fa';
 
 const EditUserModal = ({ user, onClose, onSave, isSaving }) => {
     const [editingUser, setEditingUser] = useState(user);
 
     useEffect(() => {
-        setEditingUser(user); // Update local state when user prop changes
+        setEditingUser(user);
     }, [user]);
 
     const handleInputChange = (e) => {
@@ -24,38 +25,41 @@ const EditUserModal = ({ user, onClose, onSave, isSaving }) => {
     return (
         <div className="edit-user-modal">
             <div className="modal-content">
-                <h3>Edit User</h3>
+                <button className="close-button" onClick={onClose}>
+                    <FaTimes />
+                </button>
+                <h2>Edit User</h2>
                 <form onSubmit={handleSubmit}>
-                    <label>
-                        Name:
-            <input
+                    <div className="form-group">
+                        <label>Name:</label>
+                        <input
                             type="text"
                             name="name"
                             value={editingUser.name}
                             onChange={handleInputChange}
                         />
-                    </label>
-                    <label>
-                        Email:
-            <input
+                    </div>
+                    <div className="form-group">
+                        <label>Email:</label>
+                        <input
                             type="email"
                             name="email"
                             value={editingUser.email}
                             onChange={handleInputChange}
                         />
-                    </label>
-                    <label>
-                        Phone Number:
-            <input
+                    </div>
+                    <div className="form-group">
+                        <label>Phone Number:</label>
+                        <input
                             type="text"
                             name="phonenum"
                             value={editingUser.phonenum}
                             onChange={handleInputChange}
                         />
-                    </label>
-                    <label>
-                        Role:
-            <select
+                    </div>
+                    <div className="form-group">
+                        <label>Role:</label>
+                        <select
                             name="role"
                             value={editingUser.role}
                             onChange={handleInputChange}
@@ -63,21 +67,24 @@ const EditUserModal = ({ user, onClose, onSave, isSaving }) => {
                             <option value="normal_user">Normal User</option>
                             <option value="admin">Admin</option>
                         </select>
-                    </label>
-                    <label>
-                        Password:
-            <input
+                    </div>
+                    <div className="form-group">
+                        <label>Password:</label>
+                        <input
                             type="password"
                             name="password"
                             onChange={handleInputChange}
+                            placeholder="Leave blank to keep current password"
                         />
-                    </label>
-                    <button type="submit" disabled={isSaving}>
-                        {isSaving ? 'Saving...' : 'Save'}
-                    </button>
-                    <button type="button" onClick={onClose} className="cancel-button">
-                        <i className="fas fa-times"></i> Cancel
-                    </button>
+                    </div>
+                    <div className="buttons">
+                        <button type="submit" className="primary" disabled={isSaving}>
+                            <FaSave /> {isSaving ? 'Saving...' : 'Save Changes'}
+                        </button>
+                        <button type="button" className="secondary" onClick={onClose}>
+                            <FaTimes /> Cancel
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

@@ -7,6 +7,9 @@ import CreateUserModal from './CreateUserModal';
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaSpinner, FaUser } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+
 const ClientOnlyTooltip = () => {
   const [mounted, setMounted] = useState(false);
   
@@ -29,6 +32,7 @@ const ClientOnlyTooltip = () => {
     />
   );
 };
+
 const ManageUsers = () => {
     const [users, setUsers] = useState([]);
     const [filteredUsers, setFilteredUsers] = useState([]);
@@ -42,33 +46,47 @@ const ManageUsers = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [usersPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const response = await fetch("http://localhost:3000/api/users");
-                const data = await response.json();
-                setUsers(data);
-                setFilteredUsers(data);
-            } catch (error) {
-                console.error("Error fetching users:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const [error, setError] = useState(null);
+    const navigate = useNavigate();
 
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await axios.get('http://localhost:3000/api/users', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            setUsers(response.data);
+            setFilteredUsers(response.data);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching users:', err);
+            setError('Failed to load users');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchUsers();
     }, []);
+
+    useEffect(() => {
+        if (searchTerm) {
+            const filtered = users.filter(user =>
+                user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                user.email.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            setFilteredUsers(filtered);
+        } else {
+            setFilteredUsers(users);
+        }
+    }, [searchTerm, users]);
 
     const handleSearch = (e) => {
         const term = e.target.value;
         setSearchTerm(term);
-
-        const filtered = users.filter(user =>
-            user.name.toLowerCase().includes(term.toLowerCase()) ||
-            user.email.toLowerCase().includes(term.toLowerCase())
-        );
-        setFilteredUsers(filtered);
-        setCurrentPage(1);
     };
 
     const handleEditClick = (user) => {
@@ -77,37 +95,24 @@ const ManageUsers = () => {
 
     const handleSave = async (updatedUser) => {
         setIsSaving(true);
-
         try {
-            const response = await fetch(`http://localhost:3000/api/users/${updatedUser.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updatedUser),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error updating user:', errorData.message);
-                return;
-            }
-
+            const token = localStorage.getItem('authToken');
+            const response = await axios.put(
+                `http://localhost:3000/api/users/${updatedUser.id}`,
+                updatedUser,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
             setSuccessMessages(['User updated successfully!']);
-
-            const updatedUsersResponse = await fetch("http://localhost:3000/api/users");
-            const updatedUsersData = await updatedUsersResponse.json();
-            setUsers(updatedUsersData);
-            setFilteredUsers(updatedUsersData);
-
+            await fetchUsers();
             setEditingUser(null);
-            setIsSaving(false);
-
-            setTimeout(() => {
-                setSuccessMessages([]);
-            }, 3000);
-        } catch (error) {
-            console.error('Network error:', error);
+        } catch (err) {
+            console.error('Error updating user:', err);
+            setError(err.response?.data?.message || 'Error updating user');
+        } finally {
             setIsSaving(false);
         }
     };
@@ -118,30 +123,19 @@ const ManageUsers = () => {
 
     const confirmDelete = async () => {
         try {
-            const response = await fetch(`http://localhost:3000/api/users/${deletingUser.id}`, {
-                method: 'DELETE',
+            const token = localStorage.getItem('authToken');
+            await axios.delete(`http://localhost:3000/api/users/${deletingUser.id}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
             });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error deleting user:', errorData.message);
-                return;
-            }
-
             setSuccessMessages(['User deleted successfully!']);
-
-            const updatedUsersResponse = await fetch("http://localhost:3000/api/users");
-            const updatedUsersData = await updatedUsersResponse.json();
-            setUsers(updatedUsersData);
-            setFilteredUsers(updatedUsersData);
-
-        } catch (error) {
-            console.error('Network error:', error);
+            await fetchUsers();
+        } catch (err) {
+            console.error('Error deleting user:', err);
+            setError(err.response?.data?.message || 'Error deleting user');
         } finally {
             setDeletingUser(null);
-            setTimeout(() => {
-                setSuccessMessages([]);
-            }, 3000);
         }
     };
 
@@ -165,9 +159,21 @@ const ManageUsers = () => {
         setIsCreating(false);
     };
 
-    const handleUserCreated = (newUser) => {
-        setUsers(prevUsers => [...prevUsers, newUser]);
-        setFilteredUsers(prevFilteredUsers => [...prevFilteredUsers, newUser]);
+    const handleUserCreated = async (newUser) => {
+        try {
+            const token = localStorage.getItem('authToken');
+            const response = await axios.post('http://localhost:3000/api/users/create', newUser, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            setSuccessMessages(['User created successfully!']);
+            await fetchUsers();
+            setIsCreating(false);
+        } catch (err) {
+            console.error('Error creating user:', err);
+            setError(err.response?.data?.message || 'Error creating user');
+        }
     };
 
     const getRoleDisplayName = (user) => {
@@ -212,6 +218,10 @@ const ManageUsers = () => {
                 <span>Loading users...</span>
             </div>
         );
+    }
+
+    if (error) {
+        return <div>Error: {error}</div>;
     }
 
     return (

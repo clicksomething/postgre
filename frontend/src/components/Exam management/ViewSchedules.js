@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { FaSearch, FaEdit, FaTrash, FaSpinner, FaEye } from 'react-icons/fa';
 import EditScheduleModal from './Modals/EditScheduleModal';
 import './ViewSchedules.scss';
+import { useNavigate } from 'react-router-dom';
 
 const ViewSchedules = ({ onScheduleSelect }) => {
     const [schedules, setSchedules] = useState([]);
@@ -11,6 +12,7 @@ const ViewSchedules = ({ onScheduleSelect }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedSchedule, setSelectedSchedule] = useState(null);
+    const navigate = useNavigate();
     
     useEffect(() => {
         fetchSchedules();
@@ -18,13 +20,24 @@ const ViewSchedules = ({ onScheduleSelect }) => {
 
     const fetchSchedules = async () => {
         try {
-            setLoading(true);
-            const response = await axios.get('http://localhost:3000/api/exams/schedules/all');
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Not authorized');
+            }
+
+            const response = await axios.get('http://localhost:3000/api/exams/schedules/all', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('Frontend Response:', response.data);
             setSchedules(response.data.schedules);
             setError(null);
-        } catch (err) {
-            console.error('Error fetching schedules:', err);
-            setError('Failed to load exam schedules');
+        } catch (error) {
+            console.error('Error fetching schedules:', error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -34,8 +47,15 @@ const ViewSchedules = ({ onScheduleSelect }) => {
         if (window.confirm('Are you sure you want to delete this schedule?')) {
             try {
                 const token = localStorage.getItem('authToken');
+                if (!token) {
+                    throw new Error('Not authorized');
+                }
+
                 await axios.delete(`http://localhost:3000/api/exams/schedules/${scheduleId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 await fetchSchedules();
             } catch (err) {
@@ -44,13 +64,9 @@ const ViewSchedules = ({ onScheduleSelect }) => {
         }
     };
 
-    const handleView = async (scheduleId) => {
-        try {
-            const response = await axios.get(`http://localhost:3000/api/exams/schedules/${scheduleId}`);
-            onScheduleSelect({ uploadId: scheduleId });
-        } catch (err) {
-            setError(err.response?.data?.message || 'Error fetching schedule details');
-        }
+    const handleViewDetails = (uploadId) => {
+        navigate(`/schedules/${uploadId}`);
+        onScheduleSelect({ uploadId });
     };
 
     const handleEdit = (schedule) => {
@@ -64,11 +80,20 @@ const ViewSchedules = ({ onScheduleSelect }) => {
         setSelectedSchedule(null);
     };
     
-    const filteredSchedules = schedules.filter(schedule => 
-        schedule.scheduleInfo.fileName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schedule.scheduleInfo.academicYear?.toString().includes(searchTerm) ||
-        schedule.scheduleInfo.semester?.toLowerCase().includes(searchTerm)
-    );
+    const getFilteredAndSortedExams = useMemo(() => {
+        if (!schedules) return [];
+
+        let filteredExams = schedules.filter(schedule => {
+            const searchString = searchTerm.toLowerCase();
+            return (
+                schedule.scheduleInfo?.fileName?.toLowerCase().includes(searchString) ||
+                schedule.scheduleInfo?.academicYear?.toString().includes(searchString) ||
+                schedule.scheduleInfo?.semester?.toLowerCase().includes(searchString)
+            );
+        });
+
+        return filteredExams;
+    }, [schedules, searchTerm]);
 
     if (loading) {
         return (
@@ -77,6 +102,10 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                 <span>Loading schedules...</span>
             </div>
         );
+    }
+
+    if (error) {
+        return <div>Error: {error}</div>;
     }
 
     return (
@@ -105,22 +134,22 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredSchedules.map(schedule => (
-                            <tr key={schedule.scheduleInfo.uploadId}>
-                                <td>{schedule.scheduleInfo.fileName}</td>
-                                <td>{schedule.scheduleInfo.academicYear}</td>
-                                <td>{schedule.scheduleInfo.semester}</td>
-                                <td>{schedule.scheduleInfo.examType}</td>
+                        {getFilteredAndSortedExams.map(schedule => (
+                            <tr key={schedule.scheduleInfo?.uploadId || schedule.uploadid}>
+                                <td>{schedule.scheduleInfo?.fileName || schedule.filename}</td>
+                                <td>{schedule.scheduleInfo?.academicYear || schedule.academicyear}</td>
+                                <td>{schedule.scheduleInfo?.semester || schedule.semester}</td>
+                                <td>{schedule.scheduleInfo?.examType || schedule.examtype}</td>
                                 <td>
-                                    <span className={`status-badge ${schedule.scheduleInfo.status}`}>
-                                        {schedule.scheduleInfo.status}
+                                    <span className={`status-badge ${schedule.scheduleInfo?.status || schedule.status}`}>
+                                        {schedule.scheduleInfo?.status || schedule.status}
                                     </span>
                                 </td>
-                                <td>{new Date(schedule.scheduleInfo.uploadedAt).toLocaleDateString()}</td>
+                                <td>{new Date(schedule.scheduleInfo?.uploadedAt || schedule.uploadedat).toLocaleDateString()}</td>
                                 <td className="actions">
                                     <button 
                                         className="view-button"
-                                        onClick={() => handleView(schedule.scheduleInfo.uploadId)}
+                                        onClick={() => handleViewDetails(schedule.scheduleInfo?.uploadId || schedule.uploadid)}
                                     >
                                         <FaEye /> View
                                     </button>
@@ -132,7 +161,7 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                                     </button>
                                     <button 
                                         className="delete-button"
-                                        onClick={() => handleDelete(schedule.scheduleInfo.uploadId)}
+                                        onClick={() => handleDelete(schedule.scheduleInfo?.uploadId || schedule.uploadid)}
                                     >
                                         <FaTrash /> Delete
                                     </button>
@@ -142,12 +171,6 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                     </tbody>
                 </table>
             </div>
-
-            {error && (
-                <div className="error-message">
-                    {error}
-                </div>
-            )}
 
             {isEditModalOpen && selectedSchedule && (
                 <EditScheduleModal

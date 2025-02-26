@@ -1,129 +1,184 @@
 // EditObserverModal.js
-import React from 'react';
+import React, { useState } from 'react';
 import './EditObserverModal.scss'; // Import the SCSS file for styling
+import { FaSave, FaTimes } from 'react-icons/fa';
 
 const EditObserverModal = ({ observer, onClose, onSave }) => {
-    // Handle form submission and call onSave
-    const handleSubmit = (e) => {
+    const [editingObserver, setEditingObserver] = useState(observer);
+    const [errors, setErrors] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Predefined options for Title and Scientific Rank
+    const titleOptions = [
+        "Dr.",
+        "Prof.",
+        "Assoc. Prof.",
+        "Assist. Prof.",
+        "Mr.",
+        "Mrs.",
+        "Ms."
+    ];
+
+    const scientificRankOptions = [
+        "Professor",
+        "Associate Professor",
+        "Assistant Professor",
+        "Lecturer",
+        "Teaching Assistant",
+        "Research Assistant"
+    ];
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        let processedValue = value;
+        
+        if (['name', 'fatherName'].includes(name)) {
+            processedValue = value
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+        
+        setEditingObserver(prev => ({
+            ...prev,
+            [name]: processedValue
+        }));
+
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Prepare updated observer data
-        const updatedObserver = {
-            observerID: observer.observerID,
-            userID: observer.userID, // Add this to maintain the link with AppUser
-            title: e.target.title.value,
-            name: e.target.name.value,
-            email: e.target.email.value,
-            phoneNum: e.target.phoneNum.value,
-            scientificRank: e.target.scientificRank.value,
-            fatherName: e.target.fatherName.value,
-            availability: e.target.availability.value,
-        };
-
-        // Call the onSave function with updated data
-        onSave(updatedObserver);
-
-        // Close the modal after saving
-        onClose();
+        setIsSubmitting(true);
+        
+        try {
+            await onSave(editingObserver);
+            onClose();
+        } catch (error) {
+            setErrors({ submit: error.message });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
         <div className="edit-observer-modal">
             <div className="modal-content">
-                <span className="close-button" onClick={onClose}>
-                    &times;
-                </span>
+                <button className="close-button" onClick={onClose}>
+                    <FaTimes />
+                </button>
                 <h2>Edit Observer</h2>
+
+                {errors.submit && (
+                    <div className="error-message submit-error">
+                        {errors.submit}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit}>
-                     {/* Title */}
                     <div className="form-group">
-                        <label htmlFor="title">Title:</label>
+                        <label>Name:</label>
                         <input
                             type="text"
-                            id="title"
-                            name="title"
-                            defaultValue={observer.title}
-                            required
-                        />
-                    </div>
-                    {/* Name */}
-                    <div className="form-group">
-                        <label htmlFor="name">Name:</label>
-                        <input
-                            type="text"
-                            id="name"
                             name="name"
-                            defaultValue={observer.name}
+                            value={editingObserver.name}
+                            onChange={handleInputChange}
                             required
                         />
                     </div>
 
-                    {/* Scientific Rank */}
                     <div className="form-group">
-                        <label htmlFor="scientificRank">Scientific Rank:</label>
+                        <label>Father's Name:</label>
                         <input
                             type="text"
-                            id="scientificRank"
-                            name="scientificRank"
-                            defaultValue={observer.scientificRank}
-                        />
-                    </div>
-
-                    {/* Father Name */}
-                    <div className="form-group">
-                        <label htmlFor="fatherName">Father Name:</label>
-                        <input
-                            type="text"
-                            id="fatherName"
                             name="fatherName"
-                            defaultValue={observer.fatherName}
+                            value={editingObserver.fatherName}
+                            onChange={handleInputChange}
+                            required
                         />
                     </div>
 
-                    {/* Email */}
                     <div className="form-group">
-                        <label htmlFor="email">Email:</label>
+                        <label>Email:</label>
                         <input
                             type="email"
-                            id="email"
                             name="email"
-                            defaultValue={observer.email}
+                            value={editingObserver.email}
+                            onChange={handleInputChange}
                             required
                         />
                     </div>
 
-                    {/* Phone Number */}
                     <div className="form-group">
-                        <label htmlFor="phoneNum">Phone Number:</label>
+                        <label>Phone Number:</label>
                         <input
                             type="text"
-                            id="phoneNum"
                             name="phoneNum"
-                            defaultValue={observer.phoneNum}
+                            value={editingObserver.phoneNum}
+                            onChange={handleInputChange}
+                            placeholder="09XXXXXXXX"
                         />
                     </div>
 
-                    {/* Availability */}
                     <div className="form-group">
-                        <label htmlFor="availability">Availability:</label>
+                        <label>Title:</label>
                         <select
-                            id="availability"
-                            name="availability"
-                            defaultValue={observer.availability}
+                            name="title"
+                            value={editingObserver.title}
+                            onChange={handleInputChange}
+                            required
                         >
-                            <option value="full-time">Full time</option>
-                            <option value="part-time">Part time</option>
+                            <option value="">Select Title</option>
+                            {titleOptions.map((title, index) => (
+                                <option key={index} value={title}>
+                                    {title}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="form-group">
+                        <label>Scientific Rank:</label>
+                        <select
+                            name="scientificRank"
+                            value={editingObserver.scientificRank}
+                            onChange={handleInputChange}
+                            required
+                        >
+                            <option value="">Select Scientific Rank</option>
+                            {scientificRankOptions.map((rank, index) => (
+                                <option key={index} value={rank}>
+                                    {rank}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="form-group">
+                        <label>Availability:</label>
+                        <select
+                            name="availability"
+                            value={editingObserver.availability}
+                            onChange={handleInputChange}
+                            required
+                        >
+                            <option value="part-time">Part Time</option>
+                            <option value="full-time">Full Time</option>
                         </select>
                     </div>
 
                     <div className="buttons">
-                        {/* Cancel Button */}
-                        <button type="button" className="cancel-button" onClick={onClose}>
-                            Cancel
+                        <button type="button" className="secondary" onClick={onClose}>
+                            <FaTimes /> Cancel
                         </button>
-
-                        {/* Submit Button */}
-                        <button type="submit" className="save-button">
-                            Save
+                        <button 
+                            type="submit" 
+                            className="primary"
+                            disabled={isSubmitting}
+                        >
+                            <FaSave /> {isSubmitting ? 'Saving...' : 'Save Changes'}
                         </button>
                     </div>
                 </form>

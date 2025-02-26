@@ -59,7 +59,12 @@ const ManageObservers = () => {
     };
     const handleConfirmDelete = async (observerId) => {
         try {
-            await axios.delete(`http://localhost:3000/api/observers/${observerId}`);
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
+            await axios.delete(`http://localhost:3000/api/users/observers/${observerId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`, // Add the Authorization header
+                },
+            });
             await fetchObservers();
             setSuccessMessages(['Observer deleted successfully']);
             setDeletingObserver(null);
@@ -72,7 +77,12 @@ const ManageObservers = () => {
     const fetchObservers = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:3000/api/observers');
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
+            const response = await axios.get('http://localhost:3000/api/users/observers', {
+                headers: {
+                    Authorization: `Bearer ${token}`, // Add the Authorization header
+                },
+            });
             setObservers(response.data);
             setFilteredObservers(response.data);
             setError(null);
@@ -109,9 +119,15 @@ const ManageObservers = () => {
 
     const handleSaveObserver = async (updatedObserver) => {
         try {
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
             await axios.put(
-                `http://localhost:3000/api/observers/${updatedObserver.observerID}`,
-                updatedObserver
+                `http://localhost:3000/api/users/observers/${updatedObserver.observerID}`,
+                updatedObserver,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`, // Add the Authorization header
+                    },
+                }
             );
             await fetchObservers(); // Refresh the list after updating
             setSuccessMessages(['Observer updated successfully']);
@@ -132,7 +148,12 @@ const ManageObservers = () => {
 
     const handleCreateObserver = async (newObserver) => {
         try {
-            const response = await axios.post('http://localhost:3000/api/observers', newObserver);
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
+            const response = await axios.post('http://localhost:3000/api/users/observers', newObserver, {
+                headers: {
+                    Authorization: `Bearer ${token}`, // Add the Authorization header
+                },
+            });
             await fetchObservers(); // Refresh the list after creating
             setSuccessMessages(['Observer created successfully']);
             setIsCreatingObserver(false);
@@ -156,9 +177,15 @@ const ManageObservers = () => {
 
     const handleSaveTimeSlot = async (updatedTimeSlot) => {
         try {
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
             await axios.put(
                 `http://localhost:3000/api/timeslots/${updatedTimeSlot.timeSlotID}`,
-                updatedTimeSlot
+                updatedTimeSlot,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`, // Add the Authorization header
+                    },
+                }
             );
             await fetchObservers(); // Refresh the list after updating timeslot
             setSuccessMessages(['Time slot updated successfully']);
@@ -171,7 +198,12 @@ const ManageObservers = () => {
 
     const handleDeleteTimeSlot = async (timeSlotID) => {
         try {
-            await axios.delete(`http://localhost:3000/api/timeslots/${timeSlotID}`);
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
+            await axios.delete(`http://localhost:3000/api/timeslots/${timeSlotID}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`, // Add the Authorization header
+                },
+            });
             await fetchObservers(); // Refresh the list after deletion
             setSuccessMessages(['Time slot deleted successfully']);
             setEditingTimeSlot(null);
@@ -202,10 +234,15 @@ const ManageObservers = () => {
 
     const handleSaveNewTimeSlot = async (newTimeSlot) => {
         try {
+            const token = localStorage.getItem('authToken'); // Get the token from localStorage
             await axios.post('http://localhost:3000/api/timeslots', {
                 ...newTimeSlot,
                 observerID: selectedObserverID,
                 day: selectedDay,
+            }, {
+                headers: {
+                    Authorization: `Bearer ${token}`, // Add the Authorization header
+                },
             });
             await fetchObservers(); // Refresh the list after creating timeslot
             setSuccessMessages(['Time slot created successfully']);

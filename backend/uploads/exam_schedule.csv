@@ -1,6 +1,0 @@
-CourseID,RoomID,ExamName,ExamType,ExamDate,Duration
-1,1,Midterm Exam,Written,10/15/2023,2 hours
-2,2,Final Exam,Written,12/10/2023,3 hours
-1,3,Quiz 1,Oral,11/5/2023,1 hour
-3,4,Project Presentation,Presentation,11/20/2023,1.5 hours
-2,5,Lab Exam ,Practical,11/30/2023,2 hours

@@ -1,30 +1,47 @@
+@use '../../styles/index' as *;
+
 /* DeleteUserModal.scss */
 .delete-user-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
+    @include modal-base;
 
-.modal-content {
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    width: 400px;
-    max-width: 90%;
-    text-align: center;
-}
+    .modal-content {
+        @include modal-content;
+        max-width: 400px;
+        text-align: center;
+    }
 
-.buttons {
-    margin-top: 20px;
-    display: flex;
-    justify-content: center;
+    .close-button {
+        @include modal-close-button;
+    }
+
+    h2 {
+        @include modal-title;
+    }
+
+    .confirmation-text {
+        margin: 20px 0;
+        
+        p {
+            margin: 10px 0;
+            color: #495057;
+            
+            &.user-name {
+                font-weight: 600;
+                font-size: 1.1rem;
+                color: #343a40;
+            }
+            
+            &.warning {
+                color: #dc3545;
+                font-size: 0.9rem;
+                margin-top: 15px;
+            }
+        }
+    }
+
+    .buttons {
+        @include modal-buttons;
+    }
 }
 
 button {

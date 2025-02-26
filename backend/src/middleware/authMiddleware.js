@@ -17,29 +17,24 @@ const getAdminRoleId = async () => {
 };
 
 const authenticateToken = (req, res, next) => {
-    console.log('Authenticating token...'); // Debugging log
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const token = req.headers.authorization?.split(' ')[1];
+    console.log('Token received:', token); // Log the token
     if (!token) {
-        console.log('No token provided');
-        return res.status(401).json({ message: 'Access denied' });
+        return res.status(401).json({ message: 'No token provided' });
     }
 
-    try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = verified;
-        console.log('User verified:', req.user);
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Invalid token' });
+        }
+        req.user = user;
         next();
-    } catch (err) {
-        console.log('Token verification failed:', err);
-        res.status(403).json({ message: 'Invalid token' });
-    }
+    });
 };
 
 const authorizeAdmin = async (req, res, next) => {
-    console.log('Authorizing admin...'); // Debugging log
-    if (!req.user || req.user.roleId !== await getAdminRoleId()) {
-        console.log('Access denied: User is not an admin');
-        return res.status(403).json({ message: 'Access denied' });
+    if (req.user.roleId !== await getAdminRoleId()) {
+        return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
     next();
 };

@@ -62,12 +62,12 @@
 
     .observer-table-container {
         overflow-x: auto;
+        margin-bottom: 2rem;
     }
 
     .observer-table {
         width: 100%;
         border-collapse: collapse;
-        margin-bottom: 2rem;
 
         th,
         td {
@@ -89,8 +89,13 @@
             }
         }
 
-        tr:hover {
-            background-color: #f1f1f1;
+        tr {
+            transition: all 0.2s ease;
+            
+            &:hover {
+                background-color: #f1f1f1;
+                transform: scale(1.002);
+            }
         }
 
         td {
@@ -160,10 +165,12 @@
         cursor: pointer;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1000;
 
         &:hover {
             background-color: #218838;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
         }
 
         svg {

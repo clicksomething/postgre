@@ -74,14 +74,11 @@ const UploadSchedule = ({ onUploadSuccess }) => {
             return;
         }
 
-        if (!formData.academicYear || !formData.semester || !formData.examType) {
-            setError('Please fill in all fields');
-            return;
-        }
-
-        const yearPattern = /^\d{4}-\d{4}$/;
-        if (!yearPattern.test(formData.academicYear)) {
-            setError('Academic year must be in format YYYY-YYYY');
+        const token = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+        
+        if (!token || userRole !== 'admin') {
+            setError('Only administrators can upload files');
             return;
         }
 
@@ -95,18 +92,10 @@ const UploadSchedule = ({ onUploadSuccess }) => {
             setUploading(true);
             setError(null);
 
-            // Get the auth token using the correct key
-            const token = localStorage.getItem('authToken');
-            const userRole = localStorage.getItem('userRole');
-
-            if (!token || userRole !== 'admin') {
-                throw new Error('You must be logged in as an admin to upload files');
-            }
-
             const response = await axios.post('http://localhost:3000/api/exams/upload', data, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${token}` // Use the correct token
+                    'Authorization': `Bearer ${token}`
                 },
                 onUploadProgress: (progressEvent) => {
                     const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);

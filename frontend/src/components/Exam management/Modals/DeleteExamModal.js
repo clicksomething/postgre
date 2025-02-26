@@ -11,8 +11,20 @@ const DeleteExamModal = ({ exam, onClose, onDelete }) => {
         setLoading(true);
         setError(null);
 
+        const token = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+        
+        if (!token || userRole !== 'admin') {
+            setError('Only administrators can delete exams');
+            return;
+        }
+
         try {
-            await axios.delete(`http://localhost:3000/api/exams/${exam.examId}`);
+            await axios.delete(`http://localhost:3000/api/exams/${exam.examId}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             onDelete(exam.examId);
             onClose();
         } catch (err) {

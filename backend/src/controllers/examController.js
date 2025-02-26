@@ -428,18 +428,17 @@ const updateExam = async (req, res) => {
 // Delete a specific exam
 const deleteExam = async (req, res) => {
     try {
-        const examId = parseInt(req.params.examId);
+        const examId = parseInt(req.params.examId); // Convert to number
         
         if (!examId || isNaN(examId)) {
+            console.log('Invalid exam ID:', req.params.examId);
             return res.status(400).json({
                 message: "Invalid exam ID provided"
             });
         }
 
-        // Begin transaction
-        await client.query('BEGIN');
+        console.log('Attempting to delete exam with ID:', examId);
 
-        // First get the exam details for the response
         const examCheck = await client.query(
             `SELECT e.*, c.CourseName 
              FROM ExamSchedule e
@@ -448,20 +447,23 @@ const deleteExam = async (req, res) => {
             [examId]
         );
 
+        console.log('Query result:', examCheck.rows);
+
         if (examCheck.rows.length === 0) {
-            await client.query('ROLLBACK');
+            console.log('No exam found with ID:', examId);
             return res.status(404).json({
                 message: "Exam not found"
             });
         }
 
-        // Delete the exam
+        console.log('Found exam:', examCheck.rows[0]);
+
         const deleteResult = await client.query(
             'DELETE FROM ExamSchedule WHERE ExamID = $1 RETURNING *',
             [examId]
         );
 
-        await client.query('COMMIT');
+        console.log('Delete result:', deleteResult.rows);
 
         res.json({
             message: "Exam deleted successfully",
@@ -473,7 +475,6 @@ const deleteExam = async (req, res) => {
             }
         });
     } catch (error) {
-        await client.query('ROLLBACK');
         console.error('Error deleting exam:', error);
         res.status(500).json({ 
             message: "Error deleting exam", 

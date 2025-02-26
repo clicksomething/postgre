@@ -12,38 +12,27 @@ const createUser = async (req, res) => {
     return res.status(400).json({ message: 'Invalid role. Must be normal_user or admin' });
   }
 
-  // Check if name is provided
-  if (!name) {
-    return res.status(400).json({ message: 'Name is required' });
-  }
-
-  // Check if email is provided
-  if (!email) {
-    return res.status(400).json({ message: 'Email is required' });
-  }
-
-  // Check if phone number is provided
-  if (!phonenum) {
-    return res.status(400).json({ message: 'Phone number is required' });
-  }
-
-  // Check if password is provided
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required' });
+  // Input validation
+  if (!name || !email || !phonenum || !password) {
+    return res.status(400).json({ 
+      message: 'All fields (name, email, phone number, and password) are required' 
+    });
   }
 
   try {
+    // Start transaction
+    await client.query('BEGIN');
+
     // Check if email already exists in ANY user table
     const existingUser = await client.query(
       `SELECT ui.Email 
        FROM UserInfo ui
-       JOIN AppUser au ON ui.ID = au.U_ID
-       JOIN Roles r ON au.RoleID = r.RoleID
        WHERE ui.Email = $1`,
       [email]
     );
 
     if (existingUser.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Email already in use' });
     }
 
@@ -66,10 +55,23 @@ const createUser = async (req, res) => {
       [userInfoId, role]
     );
 
-    res.status(201).json({ message: 'User created successfully', userId: userResult.rows[0].UserID });
+    // Commit transaction
+    await client.query('COMMIT');
+
+    res.status(201).json({ 
+      message: 'User created successfully', 
+      userId: userResult.rows[0].userid,
+      userInfoId: userInfoId 
+    });
+
   } catch (err) {
-    console.error('Error creating user:', err); // Log the specific error message
-    res.status(500).json({ message: 'Error creating user', error: err.message }); // Include error message in response
+    // Rollback in case of error
+    await client.query('ROLLBACK');
+    console.error('Error creating user:', err);
+    res.status(500).json({ 
+      message: 'Error creating user', 
+      error: err.message 
+    });
   }
 };
 

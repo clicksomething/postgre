@@ -1,24 +1,132 @@
 /* CreateUser.scss */
 
-.create-user-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
+@use '../../styles/index' as *;
 
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90%;
+.create-user-modal {
+  @include modal-base;
+
+  .modal-content {
+    @include modal-content;
+    max-width: 500px;
+  }
+
+  .close-button {
+    @include modal-close-button;
+  }
+
+  h2 {
+    @include modal-title;
+  }
+
+  .form-group {
+    @include modal-form-group;
+    position: relative;
+    margin-bottom: 1.5rem;
+
+    &.error {
+      input, select {
+        border-color: #dc3545;
+        background-color: #fff8f8;
+      }
+
+      .error-text {
+        color: #dc3545;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+        display: block;
+      }
+    }
+
+    &.password-group {
+      .password-input {
+        position: relative;
+        display: flex;
+        align-items: center;
+
+        input {
+          padding-right: 40px;
+        }
+
+        .toggle-password {
+          position: absolute;
+          right: 10px;
+          background: none;
+          border: none;
+          color: #6c757d;
+          cursor: pointer;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 30px;
+          height: 30px;
+          transition: color 0.2s ease;
+
+          &:hover {
+            color: #343a40;
+          }
+        }
+      }
+    }
+  }
+
+  .form-progress {
+    width: 100%;
+    height: 4px;
+    background-color: #e9ecef;
+    border-radius: 2px;
+    margin: 1rem 0 2rem;
+    overflow: hidden;
+
+    .progress-bar {
+      height: 100%;
+      background-color: #28a745;
+      transition: width 0.3s ease;
+    }
+  }
+
+  .submit-error {
+    background-color: #fff8f8;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+  .buttons {
+    @include modal-buttons;
+    margin-top: 2rem;
+
+    button {
+      &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+
+        &:hover {
+          transform: none;
+        }
+      }
+    }
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+  }
+
+  .error {
+    animation: shake 0.4s ease-in-out;
+  }
 }
 
 .create-user-container {

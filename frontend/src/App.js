@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, Switch } from 'react-router-dom';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import ForgotPassword from './components/ForgotPassword';
 import Login from './components/Login';
@@ -8,6 +8,7 @@ import ManageExams from './components/Exam management/ManageExams';
 import Dashboard from './components/Dashboard';
 import ManageUsers from './components/User Management/ManageUsers';
 import Navbar from './components/Navbar'; // Import the Navbar component
+import ScheduleDetails from './components/Exam management/ScheduleDetails';
 
 const App = () => {
   const [role, setRole] = useState(null);
@@ -76,6 +77,7 @@ const App = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/manage-observers" element={<ManageObservers />} />
           <Route path="/manage-exams" element={role === 'admin' ? <ManageExams /> : <Navigate to="/login" />} />
+          <Route path="/schedules/:id" element={<ScheduleDetails />} />
         </Routes>
       </div>
     </Router>

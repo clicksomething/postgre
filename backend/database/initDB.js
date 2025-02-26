@@ -1,23 +1,38 @@
 const { Client } = require('pg');
 require('dotenv').config();
 
-const client = new Client({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
-});
-
 async function initDB() {
+  const client = new Client({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT,
+  });
+
   const query = `
-    -- Create the availability_enum type
+    -- Create the availability_enum type if it doesn't exist
     DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'availability_enum') THEN
         CREATE TYPE availability_enum AS ENUM ('full-time', 'part-time');
       END IF;
     END $$;
 
+    -- Create semester_type enum if it doesn't exist
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'semester_type') THEN
+        CREATE TYPE semester_type AS ENUM ('First', 'Second', 'Summer');
+      END IF;
+    END $$;
+
+    -- Create exam_type enum if it doesn't exist
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'exam_type') THEN
+        CREATE TYPE exam_type AS ENUM ('First', 'Second', 'Practical', 'Final');
+      END IF;
+    END $$;
+
+    -- Create UserInfo table first
     CREATE TABLE IF NOT EXISTS UserInfo (
       ID SERIAL PRIMARY KEY,
       Name VARCHAR(255) NOT NULL,
@@ -26,40 +41,48 @@ async function initDB() {
       Password VARCHAR(255) NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS Course (
-      CourseID SERIAL PRIMARY KEY,
-      CourseName VARCHAR(255) NOT NULL,
-      Departement VARCHAR(255)
-    );
-
-    CREATE TABLE IF NOT EXISTS Room (
-      RoomID SERIAL PRIMARY KEY,
-      RoomNum VARCHAR(50) NOT NULL,
-      SeatingCapacity INT NOT NULL
-    );
-
+    -- Create Roles table
     CREATE TABLE IF NOT EXISTS Roles (
       RoleID SERIAL PRIMARY KEY,
       RoleName VARCHAR(255) UNIQUE NOT NULL
     );
 
+    -- Create Permissions table
     CREATE TABLE IF NOT EXISTS Permissions (
       PermissionID SERIAL PRIMARY KEY,
       PermissionName VARCHAR(255) UNIQUE NOT NULL
     );
 
+    -- Create RolePermissions table
     CREATE TABLE IF NOT EXISTS RolePermissions (
       RoleID INT REFERENCES Roles(RoleID) ON DELETE CASCADE,
       PermissionID INT REFERENCES Permissions(PermissionID) ON DELETE CASCADE,
       PRIMARY KEY (RoleID, PermissionID)
     );
 
+    -- Create AppUser table
     CREATE TABLE IF NOT EXISTS AppUser (
       UserID SERIAL PRIMARY KEY,
       U_ID INT REFERENCES UserInfo(ID) ON DELETE CASCADE,
       RoleID INT REFERENCES Roles(RoleID) ON DELETE SET NULL
     );
 
+    -- Create UploadedSchedules table
+    CREATE TABLE IF NOT EXISTS UploadedSchedules (
+      UploadID SERIAL PRIMARY KEY,
+      AcademicYear VARCHAR(9) NOT NULL,
+      Semester semester_type NOT NULL,
+      ExamType exam_type NOT NULL,
+      FileName VARCHAR(255) NOT NULL,
+      UploadedBy INT REFERENCES AppUser(UserID),
+      UploadedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ProcessedAt TIMESTAMP,
+      Status VARCHAR(50) DEFAULT 'pending',
+      ErrorLog TEXT,
+      UNIQUE(AcademicYear, Semester, ExamType)
+    );
+
+    -- Create Observer table
     CREATE TABLE IF NOT EXISTS Observer (
       ObserverID SERIAL PRIMARY KEY,
       U_ID INT REFERENCES AppUser(UserID) ON DELETE CASCADE,
@@ -72,13 +95,60 @@ async function initDB() {
       FatherName VARCHAR(255),
       Availability availability_enum NOT NULL
     );
-    
+
+    -- Create TimeSlot table
     CREATE TABLE IF NOT EXISTS TimeSlot (
       TimeSlotID SERIAL PRIMARY KEY,
       StartTime TIME NOT NULL,
       EndTime TIME NOT NULL,
       day VARCHAR(10),
       ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE
+    );
+
+    -- Create Course table
+    CREATE TABLE IF NOT EXISTS Course (
+      CourseID SERIAL PRIMARY KEY,
+      CourseName VARCHAR(255) NOT NULL,
+      Departement VARCHAR(255)
+    );
+
+    -- Create Room table
+    CREATE TABLE IF NOT EXISTS Room (
+      RoomID SERIAL PRIMARY KEY,
+      RoomNum VARCHAR(50) NOT NULL,
+      SeatingCapacity INT NOT NULL
+    );
+
+    -- Create ExamSchedule table
+    CREATE TABLE IF NOT EXISTS ExamSchedule (
+      ExamID SERIAL PRIMARY KEY,
+      CourseID INT REFERENCES Course(CourseID) ON DELETE CASCADE,
+      RoomID INT REFERENCES Room(RoomID) ON DELETE CASCADE,
+      ScheduleID INT REFERENCES UploadedSchedules(UploadID) ON DELETE CASCADE,
+      ExamName VARCHAR(255) NOT NULL,      
+      ExamType VARCHAR(50) NOT NULL,       
+      StartTime TIME NOT NULL,
+      EndTime TIME NOT NULL,
+      ExamDate DATE NOT NULL,
+      NumOfStudents INT NOT NULL,
+      ExamHead INT REFERENCES Observer(ObserverID),
+      ExamSecretary INT REFERENCES Observer(ObserverID),
+      Status VARCHAR(50) DEFAULT 'unassigned',
+      CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create ExamAssignment table
+    CREATE TABLE IF NOT EXISTS ExamAssignment (
+        AssignmentID SERIAL PRIMARY KEY,
+        ExamID INT REFERENCES ExamSchedule(ExamID) ON DELETE CASCADE,
+        ScheduleID INT REFERENCES UploadedSchedules(UploadID) ON DELETE CASCADE,
+        ObserverID INT REFERENCES Observer(ObserverID) ON DELETE CASCADE,
+        Role VARCHAR(50) CHECK (Role IN ('head', 'secretary')),
+        AssignedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        Status VARCHAR(50) DEFAULT 'active',
+        UNIQUE(ExamID, Role, ScheduleID),
+        UNIQUE(ExamID, ObserverID, ScheduleID)
     );
 
     -- Create a function to check observer availability
@@ -124,23 +194,6 @@ async function initDB() {
     FOR EACH ROW
     EXECUTE FUNCTION check_observer_update();
 
-    CREATE TABLE IF NOT EXISTS ExamSchedule (
-      ExamID SERIAL PRIMARY KEY,
-      CourseID INT REFERENCES Course(CourseID) ON DELETE CASCADE,
-      RoomID INT REFERENCES Room(RoomID) ON DELETE CASCADE,
-      ExamName VARCHAR(255) NOT NULL,      
-      ExamType VARCHAR(50) NOT NULL,       
-      StartTime TIME NOT NULL,
-      EndTime TIME NOT NULL,
-      ExamDate DATE NOT NULL,
-      NumOfStudents INT NOT NULL,
-      ExamHead INT REFERENCES Observer(ObserverID),
-      ExamSecretary INT REFERENCES Observer(ObserverID),
-      Status VARCHAR(50) DEFAULT 'unassigned',
-      CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-
     -- Timestamp update trigger
     CREATE OR REPLACE FUNCTION update_timestamp()
     RETURNS TRIGGER AS $$
@@ -156,6 +209,60 @@ async function initDB() {
     FOR EACH ROW
     EXECUTE FUNCTION update_timestamp();
 
+    -- Create function to sync assignments with ExamSchedule
+    CREATE OR REPLACE FUNCTION sync_exam_assignments()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            -- Update ExamSchedule based on role
+            IF NEW.Role = 'head' THEN
+                UPDATE ExamSchedule 
+                SET ExamHead = NEW.ObserverID,
+                    Status = CASE 
+                        WHEN ExamSecretary IS NOT NULL THEN 'assigned'
+                        ELSE 'partially_assigned'
+                    END
+                WHERE ExamID = NEW.ExamID;
+            ELSIF NEW.Role = 'secretary' THEN
+                UPDATE ExamSchedule 
+                SET ExamSecretary = NEW.ObserverID,
+                    Status = CASE 
+                        WHEN ExamHead IS NOT NULL THEN 'assigned'
+                        ELSE 'partially_assigned'
+                    END
+                WHERE ExamID = NEW.ExamID;
+            END IF;
+        ELSIF TG_OP = 'DELETE' THEN
+            -- Handle removal of assignments
+            IF OLD.Role = 'head' THEN
+                UPDATE ExamSchedule 
+                SET ExamHead = NULL,
+                    Status = CASE 
+                        WHEN ExamSecretary IS NOT NULL THEN 'partially_assigned'
+                        ELSE 'unassigned'
+                    END
+                WHERE ExamID = OLD.ExamID;
+            ELSIF OLD.Role = 'secretary' THEN
+                UPDATE ExamSchedule 
+                SET ExamSecretary = NULL,
+                    Status = CASE 
+                        WHEN ExamHead IS NOT NULL THEN 'partially_assigned'
+                        ELSE 'unassigned'
+                    END
+                WHERE ExamID = OLD.ExamID;
+            END IF;
+        END IF;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Create triggers for ExamAssignment
+    DROP TRIGGER IF EXISTS exam_assignment_sync_trigger ON ExamAssignment;
+    CREATE TRIGGER exam_assignment_sync_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON ExamAssignment
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_exam_assignments();
+
     CREATE TABLE IF NOT EXISTS Preferences (
       PreferenceID SERIAL PRIMARY KEY,
       ExamScheduleID INT REFERENCES ExamSchedule(ExamID) ON DELETE CASCADE,
@@ -163,231 +270,61 @@ async function initDB() {
       Description TEXT
     );
 
-    -- First create the ENUM types
-    CREATE TYPE semester_type AS ENUM ('First', 'Second', 'Summer');
-    CREATE TYPE exam_type AS ENUM ('First', 'Second', 'Practical', 'Final');
 
-    -- Then create the table
-    CREATE TABLE IF NOT EXISTS UploadedSchedules (
-      UploadID SERIAL PRIMARY KEY,
-      AcademicYear VARCHAR(9) NOT NULL,
-      Semester semester_type NOT NULL,
-      ExamType exam_type NOT NULL,
-      FileName VARCHAR(255) NOT NULL,
-      UploadedBy INT REFERENCES AppUser(UserID),
-      UploadedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      ProcessedAt TIMESTAMP,
-      Status VARCHAR(50) DEFAULT 'pending',
-      ErrorLog TEXT,
-      UNIQUE(AcademicYear, Semester, ExamType)
-    );
-
-    -- Modify ExamSchedule table to include the schedule reference
-    ALTER TABLE ExamSchedule 
-    ADD COLUMN ScheduleID INT REFERENCES UploadedSchedules(UploadID);
   `;
 
   try {
     await client.connect();
-    await client.query('BEGIN');  // Start the transaction
-
-    console.log("Starting to create tables...");
-    // Execute the queries
+    await client.query('BEGIN');
     await client.query(query);
-    console.log("Tables created successfully!");
 
-    // Insert default roles and permissions
-    await client.query(`
-      INSERT INTO Roles (RoleName) VALUES
-      ('normal_user'),
-      ('admin'),
-      ('observer')
+    // Insert Roles
+    const rolesQuery = `
+      INSERT INTO Roles (RoleName)
+      VALUES 
+        ('normal_user'),
+        ('admin'),
+        ('observer')
       ON CONFLICT (RoleName) DO NOTHING;
-    `);
+    `;
+    await client.query(rolesQuery);
 
-    await client.query(`
-      INSERT INTO Permissions (PermissionName) VALUES
-      ('upload_schedule'),
-      ('manage_users'),
-      ('view_schedule')
+    // Insert Permissions
+    const permissionsQuery = `
+      INSERT INTO Permissions (PermissionName)
+      VALUES 
+        ('create_exam'),
+        ('edit_exam'),
+        ('delete_exam'),
+        ('assign_observer'),
+        ('view_reports')
       ON CONFLICT (PermissionName) DO NOTHING;
-    `);
+    `;
+    await client.query(permissionsQuery);
 
-    await client.query(`
-      INSERT INTO RolePermissions (RoleID, PermissionID) VALUES
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'normal_user'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'upload_schedule')),
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'normal_user'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule')),
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'manage_users')),
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'upload_schedule')),
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'admin'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule')),
-      ((SELECT RoleID FROM Roles WHERE RoleName = 'observer'), (SELECT PermissionID FROM Permissions WHERE PermissionName = 'view_schedule'))
-      ON CONFLICT DO NOTHING;
-    `);
+    // Insert RolePermissions
+    const rolePermissionsQuery = `
+      INSERT INTO RolePermissions (RoleID, PermissionID)
+      SELECT r.RoleID, p.PermissionID
+      FROM Roles r, Permissions p
+      WHERE r.RoleName = 'admin' AND p.PermissionName IN (
+        'create_exam', 'edit_exam', 'delete_exam', 'assign_observer', 'view_reports'
+      )
+      UNION ALL
+      SELECT r.RoleID, p.PermissionID
+      FROM Roles r, Permissions p
+      WHERE r.RoleName = 'observer' AND p.PermissionName IN (
+        'create_exam', 'edit_exam', 'delete_exam', 'assign_observer', 'view_reports'
+      )
+      ON CONFLICT (RoleID, PermissionID) DO NOTHING;
+    `;
+    await client.query(rolePermissionsQuery);
 
-    // Insert dummy data into UserInfo if empty
-    const userCount = await client.query('SELECT COUNT(*) FROM UserInfo');
-    if (parseInt(userCount.rows[0].count) === 0) {
-      await client.query(`
-        -- First, insert admin users
-        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
-        ('amer', 'amer@gmail.com', '123456', '123456'),
-        ('majd', 'majd@gmail.com', '123456', '123456');
-
-        -- Then, insert regular users
-        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
-        ('Alice Smith', 'alice@example.com', '1234567890', 'password123'),
-        ('Bob Johnson', 'bob@example.com', '0987654321', 'password456');
-
-        -- Then, insert observer users separately
-        INSERT INTO UserInfo (Name, Email, PhoneNum, Password) VALUES
-        ('John Smith', 'john.smith@example.com', '1234567890', 'observerpassword'),
-        ('Robert Johnson', 'robert.johnson@example.com', '0987654321', 'observerpassword'),
-        ('David Brown', 'david.brown@example.com', '5555555555', 'observerpassword');
-      `);
-    }
-
-    // Insert dummy data into AppUser if empty
-    const appUserCount = await client.query('SELECT COUNT(*) FROM AppUser');
-    if (parseInt(appUserCount.rows[0].count) === 0) {
-      await client.query(`
-        -- Insert admin users first
-        INSERT INTO AppUser (U_ID, RoleID)
-        SELECT 
-          ui.ID,
-          (SELECT RoleID FROM Roles WHERE RoleName = 'admin')
-        FROM UserInfo ui
-        WHERE ui.Email IN ('amer@gmail.com', 'majd@gmail.com');
-
-        -- Insert regular users with their roles
-        INSERT INTO AppUser (U_ID, RoleID)
-        SELECT 
-          ui.ID,
-          CASE 
-            WHEN ui.Email = 'alice@example.com' THEN (SELECT RoleID FROM Roles WHERE RoleName = 'normal_user')
-            WHEN ui.Email = 'bob@example.com' THEN (SELECT RoleID FROM Roles WHERE RoleName = 'admin')
-          END
-        FROM UserInfo ui
-        WHERE ui.Email IN ('alice@example.com', 'bob@example.com');
-
-        -- Insert observers with observer role
-        INSERT INTO AppUser (U_ID, RoleID)
-        SELECT 
-          ui.ID,
-          (SELECT RoleID FROM Roles WHERE RoleName = 'observer')
-        FROM UserInfo ui
-        WHERE ui.Email IN (
-          'john.smith@example.com',
-          'robert.johnson@example.com',
-          'david.brown@example.com'
-        );
-      `);
-    }
-
-    // Insert dummy data into Observer if empty
-    const observerCount = await client.query('SELECT COUNT(*) FROM Observer');
-    if (parseInt(observerCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO Observer (U_ID, Email, Password, Name, PhoneNum, Title, ScientificRank, FatherName, Availability) 
-        SELECT 
-          au.UserID,
-          ui.Email,
-          ui.Password,
-          ui.Name,
-          ui.PhoneNum,
-          CASE 
-            WHEN ui.Name = 'John Smith' THEN 'Dr.'
-            WHEN ui.Name = 'Robert Johnson' THEN 'Prof.'
-            ELSE 'Dr.'
-          END as Title,
-          CASE 
-            WHEN ui.Name = 'John Smith' THEN 'Professor'
-            WHEN ui.Name = 'Robert Johnson' THEN 'Associate Professor'
-            ELSE 'Assistant Professor'
-          END as ScientificRank,
-          CASE 
-            WHEN ui.Name = 'John Smith' THEN 'John Smith Sr.'
-            WHEN ui.Name = 'Robert Johnson' THEN 'Robert Johnson Sr.'
-            ELSE 'William Anderson'
-          END as FatherName,
-          CASE 
-            WHEN ui.Name = 'John Smith' THEN 'full-time'::availability_enum
-            ELSE 'part-time'::availability_enum
-          END as Availability
-        FROM AppUser au
-        JOIN UserInfo ui ON au.U_ID = ui.ID
-        WHERE ui.Email IN (
-          'john.smith@example.com',
-          'robert.johnson@example.com',
-          'david.brown@example.com'
-        );
-      `);
-    }
-
-    // Insert dummy data into TimeSlot if empty (only for part-time observers)
-    const timeSlotCount = await client.query('SELECT COUNT(*) FROM TimeSlot');
-    if (parseInt(timeSlotCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO TimeSlot (StartTime, EndTime, day, ObserverID) VALUES
-        ('09:00:00', '10:00:00', 'Monday', 2),    -- For Robert Johnson
-        ('10:30:00', '11:30:00', 'Wednesday', 2),
-        ('14:00:00', '15:00:00', 'Monday', 3),    -- For Alice Williams
-        ('15:30:00', '16:30:00', 'Thursday', 3);
-      `);
-    }
-
-    // Insert dummy data into Course if empty
-    const courseCount = await client.query('SELECT COUNT(*) FROM Course');
-    if (parseInt(courseCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO Course (CourseName, Departement) VALUES
-        ('Introduction to Programming', 'Computer Science'),
-        ('Data Structures and Algorithms', 'Computer Science'),
-        ('Database Management Systems', 'Information Technology'),
-        ('Web Development', 'Computer Science'),
-        ('Machine Learning', 'Artificial Intelligence');
-      `);
-    }
-
-    // Insert dummy data into Room if empty
-    const roomCount = await client.query('SELECT COUNT(*) FROM Room');
-    if (parseInt(roomCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO Room (RoomNum, SeatingCapacity) VALUES
-        ('Room 101', 30),
-        ('Room 102', 25),
-        ('Room 201', 50),
-        ('Room 202', 40),
-        ('Room 301', 20);
-      `);
-    }
-
-    // Insert dummy data into ExamSchedule if empty
-    const examScheduleCount = await client.query('SELECT COUNT(*) FROM ExamSchedule');
-    if (parseInt(examScheduleCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO ExamSchedule (CourseID, RoomID, ExamName, ExamType, StartTime, EndTime, NumOfStudents, ExamDate, ExamHead, ExamSecretary) VALUES
-        (1, 1, 'Midterm Exam', 'theoretical', '09:00:00', '11:00:00', 30, '2023-10-15', 1, 2),
-        (2, 2, 'Final Exam', 'practical', '10:00:00', '13:00:00', 25, '2023-12-10', 2, 3);
-      `);
-    }
-
-    // Insert dummy data into Preferences if empty
-    const preferencesCount = await client.query('SELECT COUNT(*) FROM Preferences');
-    if (parseInt(preferencesCount.rows[0].count) === 0) {
-      await client.query(`
-        INSERT INTO Preferences (ExamScheduleID, ObserverID, Description) VALUES
-        (1, 1, 'Preferred time slot for the exam.'),
-        (2, 2, 'Needs additional resources for preparation.');
-      `);
-    }
-
-    // If we reach here, commit the transaction
     await client.query('COMMIT');
-    console.log("Database setup completed successfully!");
+    console.log("Database setup and roles/permissions inserted successfully!");
   } catch (err) {
-    // If an error occurs, roll back the transaction
     await client.query('ROLLBACK');
-    console.error("Error creating tables, transaction rolled back:", err);
+    console.error("Error during initialization:", err);
   } finally {
     await client.end();
   }

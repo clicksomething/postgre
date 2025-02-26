@@ -64,7 +64,6 @@ const EditScheduleModal = ({ schedule, onClose, onUpdate }) => {
     const handleCheck = async (e) => {
         e.preventDefault();
         
-        // Validate before proceeding
         const error = validateAcademicYear(formData.academicYear);
         if (error) {
             setError(error);
@@ -77,6 +76,10 @@ const EditScheduleModal = ({ schedule, onClose, onUpdate }) => {
 
         try {
             const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Not authorized');
+            }
+
             const response = await axios.post(
                 `http://localhost:3000/api/exams/schedules/${schedule.uploadId}/check`,
                 { academicYear: formData.academicYear },
@@ -100,11 +103,18 @@ const EditScheduleModal = ({ schedule, onClose, onUpdate }) => {
     };
 
     const handleSubmit = async () => {
+        const token = localStorage.getItem('authToken');
+        const userRole = localStorage.getItem('userRole');
+        
+        if (!token || userRole !== 'admin') {
+            setError('Only administrators can edit schedules');
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
         try {
-            const token = localStorage.getItem('authToken');
             const response = await axios.put(
                 `http://localhost:3000/api/exams/schedules/${schedule.uploadId}`,
                 { ...formData, updateExams },

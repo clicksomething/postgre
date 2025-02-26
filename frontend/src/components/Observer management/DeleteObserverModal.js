@@ -1,6 +1,6 @@
 import React from 'react';
 import './DeleteObserverModal.scss';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaTrash } from 'react-icons/fa';
 
 const DeleteObserverModal = ({ observer, onClose, onConfirm }) => {
     const handleConfirm = () => {
@@ -8,27 +8,23 @@ const DeleteObserverModal = ({ observer, onClose, onConfirm }) => {
     };
 
     return (
-        <div className="modal-overlay">
-            <div className="delete-observer-modal">
-                <div className="modal-header">
-                    <h2>Delete Observer</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <FaTimes />
-                    </button>
+        <div className="delete-observer-modal">
+            <div className="modal-content">
+                <button className="close-button" onClick={onClose}>
+                    <FaTimes />
+                </button>
+                <h2>Delete Observer</h2>
+                <div className="confirmation-text">
+                    <p>Are you sure you want to delete the observer:</p>
+                    <p className="observer-name">{observer.name}?</p>
+                    <p className="warning">This action cannot be undone.</p>
                 </div>
-                <div className="modal-content">
-                    <div className="confirmation-text">
-                        <p>Are you sure you want to delete the observer:</p>
-                        <p className="observer-name">{observer.name}?</p>
-                        <p className="warning">This action cannot be undone.</p>
-                    </div>
-                </div>
-                <div className="modal-footer">
-                    <button className="cancel-button" onClick={onClose}>
-                        Cancel
+                <div className="buttons">
+                    <button type="button" className="secondary" onClick={onClose}>
+                        <FaTimes /> Cancel
                     </button>
-                    <button className="delete-button" onClick={handleConfirm}>
-                        Delete
+                    <button type="button" className="danger" onClick={handleConfirm}>
+                        <FaTrash /> Delete
                     </button>
                 </div>
             </div>
