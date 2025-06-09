@@ -2,6 +2,30 @@ const { client } = require('../../database/db.js');  // Assuming client is the s
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+// Add this code near the top of controllers/userObserverController.js
+
+const multer = require('multer');
+const xlsx = require('xlsx');
+const crypto = require('crypto');
+
+const fileFilter = (req, file, cb) => {
+  // Mimetypes for Excel files (.xlsx, .xls)
+  if (
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.mimetype === 'application/vnd.ms-excel'
+  ) {
+      cb(null, true); // Accept the file
+  } else {
+      // Reject other files
+      cb(new Error('Only Excel files (.xlsx, .xls) are allowed!'), false);
+  }
+};
+
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: fileFilter,
+});
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -580,6 +604,188 @@ const deleteObserver = async (req, res) => {
   }
 };
 
+const uploadObservers = async (req, res) => {
+  if (!req.file) {
+      return res.status(400).json({ message: "No Excel file uploaded." });
+  }
+
+  const summary = {
+      observersCreated: 0,
+      timeSlotsCreated: 0,
+      errors: [],
+  };
+
+  // --- UPDATED: Header mapping now excludes email and phone number ---
+  const headerMapping = {
+      'الاسم': 'name',
+      'الاسم ': 'name',  // Added mapping for name with trailing space
+      'اللقب': 'title',
+      'المرتبة العلمية': 'scientificRank',
+      'اسم الأب': 'fatherName',
+      'التفرغ': 'availability',
+      'السبت': 'saturday',
+      'الاحد': 'sunday',
+      'الاثنين': 'monday',
+      'الثلاثاء': 'tuesday',
+      'الاربعاء': 'wednesday',
+      'الخميس': 'thursday',
+  };
+
+  // Add availability mapping
+  const availabilityMapping = {
+      'جزئي': 'part-time',
+      'كامل': 'full-time',
+      'part-time': 'part-time',
+      'full-time': 'full-time'
+  };
+  
+  const dayColumns = {
+      saturday: 'Saturday',
+      sunday: 'Sunday',
+      monday: 'Monday',
+      tuesday: 'Tuesday',
+      wednesday: 'Wednesday',
+      thursday: 'Thursday',
+  };
+
+  try {
+      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error("The uploaded Excel file contains no sheets.");
+      
+      const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+      if (results.length > 0) {
+          console.log("--- DEBUG: Headers read from your Excel file ---");
+          console.log(Object.keys(results[0]));
+          console.log("--- DEBUG: First row of data ---");
+          console.log(results[0]);
+          console.log("-------------------------------------------------");
+      }
+
+      const roleResult = await client.query(`SELECT "roleid" FROM "roles" WHERE "rolename" = 'observer'`);
+      const observerRoleId = roleResult.rows[0]?.roleid;
+      if (!observerRoleId) throw new Error("The 'observer' role was not found.");
+
+      for (const [index, row] of results.entries()) {
+          const rowNum = index + 2;
+          try {
+              await client.query('BEGIN');
+              
+              const mappedRow = Object.keys(row).reduce((acc, key) => {
+                  const trimmedKey = key.trim();
+                  if (headerMapping[trimmedKey]) {
+                      acc[headerMapping[trimmedKey]] = row[key];
+                  }
+                  return acc;
+              }, {});
+
+              console.log(`--- DEBUG: Processing row ${rowNum} ---`);
+              console.log('Original row:', row);
+              console.log('Mapped row:', mappedRow);
+              console.log('-------------------------------------------------');
+
+              const { name, title, scientificRank, fatherName, availability } = mappedRow;
+
+              if (!name) {
+                  summary.errors.push({ row: rowNum, message: 'Missing required field: Name' });
+                  await client.query('ROLLBACK');
+                  continue;
+              }
+
+              // Map availability to English
+              const mappedAvailability = availabilityMapping[availability?.trim()] || 'part-time';
+
+              const existingUser = await client.query(`SELECT "id" FROM "userinfo" WHERE "name" = $1`, [name]);
+              if (existingUser.rows.length > 0) {
+                  summary.errors.push({ row: rowNum, name, message: 'An observer with this name already exists.' });
+                  await client.query('ROLLBACK');
+                  continue;
+              }
+
+              const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const uniquePart = crypto.randomBytes(3).toString('hex');
+              const email = `${sanitizedName}.${uniquePart}@observers.local`;
+
+              const defaultPassword = crypto.randomBytes(8).toString('hex');
+              const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+              
+              const userInfoResult = await client.query(
+                  `INSERT INTO "userinfo" ("name", "email", "phonenum", "password") 
+                   VALUES ($1, $2, $3, $4) RETURNING "id"`,
+                  [name, email, null, hashedPassword]
+              );
+              
+              const userInfoId = userInfoResult.rows[0].id;
+              
+              const appUserResult = await client.query(
+                  `INSERT INTO "appuser" ("u_id", "roleid") 
+                   VALUES ($1, $2) RETURNING "userid"`,
+                  [userInfoId, observerRoleId]
+              );
+              
+              const appUserId = appUserResult.rows[0].userid;
+              
+              const observerResult = await client.query(
+                  `INSERT INTO "observer" ("u_id", "email", "password", "name", "phonenum", "title", "scientificrank", "fathername", "availability") 
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "observerid"`,
+                  [appUserId, email, hashedPassword, name, null, title, scientificRank, fatherName, mappedAvailability]
+              );
+              
+              const newObserverId = observerResult.rows[0].observerid;
+              summary.observersCreated++;
+
+              if (mappedAvailability === 'part-time') {
+                  for (const dayKey in dayColumns) {
+                      const timeString = mappedRow[dayKey];
+                      if (timeString && timeString.toString().trim() !== '') {
+                          const timeParts = timeString.toString().split('-').map(p => p.trim());
+                          if (timeParts.length === 2) {
+                              const [startTime, endTime] = timeParts;
+                              const dayName = dayColumns[dayKey];
+                              await client.query(
+                                  `INSERT INTO "timeslot" ("starttime", "endtime", "day", "observerid") 
+                                   VALUES ($1, $2, $3, $4)`,
+                                  [startTime, endTime, dayName, newObserverId]
+                              );
+                              summary.timeSlotsCreated++;
+                          } else {
+                              summary.errors.push({ 
+                                  row: rowNum, 
+                                  message: `Could not parse time for ${dayColumns[dayKey]}: "${timeString}"` 
+                              });
+                          }
+                      }
+                  }
+              }
+
+              await client.query('COMMIT');
+          } catch (rowError) {
+              await client.query('ROLLBACK');
+              console.error(`Error processing row ${rowNum}:`, rowError);
+              summary.errors.push({ 
+                  row: rowNum, 
+                  name: mappedRow.name, 
+                  message: `Error processing row: ${rowError.message}` 
+              });
+          }
+      }
+      
+      res.status(201).json({ 
+          message: "Observer Excel upload processed.", 
+          ...summary 
+      });
+
+  } catch (err) {
+      console.error('Fatal error during bulk observer upload:', err);
+      res.status(500).json({ 
+          message: 'Failed to upload observers due to a fatal error.', 
+          error: err.message 
+      });
+  }
+};
+
+
 module.exports = {
   createUser,
   createObserver,
@@ -591,5 +797,7 @@ module.exports = {
   updateUser,
   updateObserver,
   deleteUser,
-  deleteObserver
+  deleteObserver,
+  upload,
+  uploadObservers,
 };

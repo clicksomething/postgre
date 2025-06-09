@@ -1,5 +1,7 @@
 .manage-observers-container {
-    padding: 20px;
+    padding: 2rem;
+    position: relative;
+    min-height: 100vh;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f8f9fa;
     border-radius: 10px;
@@ -145,30 +147,7 @@
     }
 
     .create-button {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        background-color: #28a745;
-        color: #ffffff;
-        border: none;
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-
-        &:hover {
-            background-color: #218838;
-            transform: translateY(-1px);
-        }
-
-        svg {
-            font-size: 1.5rem;
-        }
+        display: none;
     }
 
     .empty-state {
@@ -387,6 +366,61 @@
 
         svg {
             transition: transform 0.2s ease;
+        }
+    }
+}
+
+.action-buttons {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    display: flex;
+    gap: 1rem;
+    z-index: 1000;
+
+    .create-button,
+    .upload-button {
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 50%;
+        border: none;
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        &:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        svg {
+            font-size: 1.5rem;
+        }
+    }
+
+    .create-button {
+        background-color: #007bff;
+
+        &:hover {
+            background-color: #0056b3;
+        }
+    }
+
+    .upload-button {
+        background-color: #28a745;
+
+        &:hover {
+            background-color: #218838;
         }
     }
 }

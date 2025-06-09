@@ -5,7 +5,8 @@ import EditObserverModal from './EditObserverModal';
 import CreateObserverModal from './CreateObserverModal';
 import EditTimeSlotModal from './EditTimeSlotModal';
 import AddTimeSlotModal from './AddTimeSlotModal';
-import { FaSearch, FaPlus, FaEdit, FaTrash, FaSpinner, FaUser } from 'react-icons/fa';
+import UploadObservers from './UploadObservers';
+import { FaSearch, FaPlus, FaEdit, FaTrash, FaSpinner, FaUser, FaUpload } from 'react-icons/fa';
 import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import SuccessMessage from '../SuccessMessage';
@@ -50,6 +51,7 @@ const ManageObservers = () => {
     const [selectedObserverID, setSelectedObserverID] = useState(null);
     const [successMessages, setSuccessMessages] = useState([]);
     const [deletingObserver, setDeletingObserver] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
     const handleDeleteClick = (observer) => {
         setDeletingObserver(observer);
     };
@@ -219,6 +221,20 @@ const ManageObservers = () => {
         setEditingTimeSlot(null);
     };
 
+    const handleUploadClick = () => {
+        setIsUploading(true);
+    };
+
+    const handleCloseUploadModal = () => {
+        setIsUploading(false);
+    };
+
+    const handleUploadSuccess = async (data) => {
+        await fetchObservers();
+        setSuccessMessages(['Observers uploaded successfully']);
+        setIsUploading(false);
+    };
+
     const sortedObservers = useMemo(() => {
         let sortableObservers = [...filteredObservers];
         if (sortConfig.key !== null) {
@@ -269,215 +285,231 @@ const ManageObservers = () => {
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
     return (
-      <div className="manage-observers-container">
-        <ClientOnlyTooltip />
-        <h1>Manage Observers</h1>
-        <div className="search-bar">
-          <FaSearch className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search by name..."
-            value={searchTerm}
-            onChange={handleSearch}
-          />
-          {searchTerm && (
-            <button className="clear-search" onClick={() => setSearchTerm("")}>
-              &times;
-            </button>
-          )}
-        </div>
-        {currentObservers.length === 0 ? (
-          <div className="empty-state">
-            <FaUser className="empty-icon" />
-            <p>No observers found.</p>
-          </div>
-        ) : (
-          <div className="observer-table-container">
-            <table className="observer-table">
-              <thead>
-                <tr>
-                  <th onClick={() => requestSort("title")}>
-                    Title{" "}
-                    {sortConfig.key === "title" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("name")}>
-                    Name{" "}
-                    {sortConfig.key === "name" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("scientificRank")}>
-                    Scientific Rank{" "}
-                    {sortConfig.key === "scientificRank" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("fatherName")}>
-                    Father's Name
-                  </th>
-                  <th onClick={() => requestSort("availability")}>
-                    Availability
-                  </th>
-                  {daysOfWeek.map((day) => (
-                    <th key={day}>{day}</th>
-                  ))}
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentObservers.map((observer) => (
-                  <tr key={observer.observerID}>
-                    <td>{observer.title}</td>
-                    <td>{observer.name}</td>
-                    <td>{observer.scientificRank}</td>
-                    <td>{observer.fatherName}</td>
-                    <td>
-                      {observer.availability === "part-time"
-                        ? "Part time"
-                        : "Full time"}
-                    </td>
-                    {daysOfWeek.map((day) => (
-                      <td
-                        key={day}
-                        className={`time-slot-cell ${
-                          observer.availability === "full-time"
-                            ? "full-time"
-                            : ""
-                        }`}
-                      >
-                        {observer.availability === "full-time" ? (
-                          <span>—</span> // Simple dash to indicate unavailable
-                        ) : (
-                          <>
-                            {observer.timeslots &&
-                              observer.timeslots
-                                .filter((ts) => ts.day === day)
-                                .map((timeSlot) => (
-                                  <div
-                                    key={timeSlot.timeSlotID}
-                                    className="time-slot"
-                                  >
-                                    <span>
-                                      {timeSlot.startTime
-                                        ? timeSlot.startTime.slice(0, 5)
-                                        : "--:--"}
-                                      -
-                                      {timeSlot.endTime
-                                        ? timeSlot.endTime.slice(0, 5)
-                                        : "--:--"}
-                                    </span>
-                                    <div className="time-slot-actions">
-                                      <button
-                                        className="edit-time-slot-button"
-                                        onClick={() =>
-                                          handleEditTimeSlot(
-                                            timeSlot,
-                                            observer.observerID
-                                          )
-                                        }
-                                        data-tooltip-id="main-tooltip"
-                                        data-tooltip-content="Edit time slot"
-                                      >
-                                        <FaEdit />
-                                      </button>
-                                    </div>
-                                  </div>
+        <div className="manage-observers-container">
+            <ClientOnlyTooltip />
+            <h1>Manage Observers</h1>
+            <div className="search-bar">
+                <FaSearch className="search-icon" />
+                <input
+                    type="text"
+                    placeholder="Search by name..."
+                    value={searchTerm}
+                    onChange={handleSearch}
+                />
+                {searchTerm && (
+                    <button className="clear-search" onClick={() => setSearchTerm("")}>
+                        &times;
+                    </button>
+                )}
+            </div>
+            {currentObservers.length === 0 ? (
+                <div className="empty-state">
+                    <FaUser className="empty-icon" />
+                    <p>No observers found.</p>
+                </div>
+            ) : (
+                <div className="observer-table-container">
+                    <table className="observer-table">
+                        <thead>
+                            <tr>
+                                <th onClick={() => requestSort("title")}>
+                                    Title{" "}
+                                    {sortConfig.key === "title" &&
+                                        (sortConfig.direction === "ascending" ? "▲" : "▼")}
+                                </th>
+                                <th onClick={() => requestSort("name")}>
+                                    Name{" "}
+                                    {sortConfig.key === "name" &&
+                                        (sortConfig.direction === "ascending" ? "▲" : "▼")}
+                                </th>
+                                <th onClick={() => requestSort("scientificRank")}>
+                                    Scientific Rank{" "}
+                                    {sortConfig.key === "scientificRank" &&
+                                        (sortConfig.direction === "ascending" ? "▲" : "▼")}
+                                </th>
+                                <th onClick={() => requestSort("fatherName")}>
+                                    Father's Name
+                                </th>
+                                <th onClick={() => requestSort("availability")}>
+                                    Availability
+                                </th>
+                                {daysOfWeek.map((day) => (
+                                    <th key={day}>{day}</th>
                                 ))}
-                            <button
-                              className="add-time-slot-button"
-                              onClick={() =>
-                                handleAddTimeSlotClick(observer.observerID, day)
-                              }
-                              data-tooltip-id="main-tooltip"
-                              data-tooltip-content="Add time slot"
-                            >
-                              <FaPlus />
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    ))}
-                    <td>
-                      <button
-                        className="edit-button"
-                        onClick={() => handleEditClick(observer)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Edit observer"
-                      >
-                        <FaEdit /> Edit
-                      </button>
-                      <button
-                        className="delete-button"
-                        onClick={() => handleDeleteClick(observer)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Delete observer"
-                      >
-                        <FaTrash /> Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {currentObservers.map((observer) => (
+                                <tr key={observer.observerID}>
+                                    <td>{observer.title}</td>
+                                    <td>{observer.name}</td>
+                                    <td>{observer.scientificRank}</td>
+                                    <td>{observer.fatherName}</td>
+                                    <td>
+                                        {observer.availability === "part-time"
+                                            ? "Part time"
+                                            : "Full time"}
+                                    </td>
+                                    {daysOfWeek.map((day) => (
+                                        <td
+                                            key={day}
+                                            className={`time-slot-cell ${
+                                                observer.availability === "full-time"
+                                                    ? "full-time"
+                                                    : ""
+                                            }`}
+                                        >
+                                            {observer.availability === "full-time" ? (
+                                                <span>—</span> // Simple dash to indicate unavailable
+                                            ) : (
+                                                <>
+                                                    {observer.timeslots &&
+                                                        observer.timeslots
+                                                            .filter((ts) => ts.day === day)
+                                                            .map((timeSlot) => (
+                                                                <div
+                                                                    key={timeSlot.timeSlotID}
+                                                                    className="time-slot"
+                                                                >
+                                                                    <span>
+                                                                        {timeSlot.startTime
+                                                                            ? timeSlot.startTime.slice(0, 5)
+                                                                            : "--:--"}
+                                                                        -
+                                                                        {timeSlot.endTime
+                                                                            ? timeSlot.endTime.slice(0, 5)
+                                                                            : "--:--"}
+                                                                    </span>
+                                                                    <div className="time-slot-actions">
+                                                                        <button
+                                                                            className="edit-time-slot-button"
+                                                                            onClick={() =>
+                                                                                handleEditTimeSlot(
+                                                                                    timeSlot,
+                                                                                    observer.observerID
+                                                                                )
+                                                                            }
+                                                                            data-tooltip-id="main-tooltip"
+                                                                            data-tooltip-content="Edit time slot"
+                                                                        >
+                                                                            <FaEdit />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    <button
+                                                        className="add-time-slot-button"
+                                                        onClick={() =>
+                                                            handleAddTimeSlotClick(observer.observerID, day)
+                                                        }
+                                                        data-tooltip-id="main-tooltip"
+                                                        data-tooltip-content="Add time slot"
+                                                    >
+                                                        <FaPlus />
+                                                    </button>
+                                                </>
+                                            )}
+                                        </td>
+                                    ))}
+                                    <td>
+                                        <button
+                                            className="edit-button"
+                                            onClick={() => handleEditClick(observer)}
+                                            data-tooltip-id="main-tooltip"
+                                            data-tooltip-content="Edit observer"
+                                        >
+                                            <FaEdit /> Edit
+                                        </button>
+                                        <button
+                                            className="delete-button"
+                                            onClick={() => handleDeleteClick(observer)}
+                                            data-tooltip-id="main-tooltip"
+                                            data-tooltip-content="Delete observer"
+                                        >
+                                            <FaTrash /> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
 
-        <Pagination
-          observersPerPage={observersPerPage}
-          totalObservers={sortedObservers.length}
-          paginate={paginate}
-          currentPage={currentPage}
-        />
+            <Pagination
+                observersPerPage={observersPerPage}
+                totalObservers={sortedObservers.length}
+                paginate={paginate}
+                currentPage={currentPage}
+            />
 
-        <button
-          className="create-button"
-          onClick={handleAddObserverClick}
-          data-tooltip-id="main-tooltip"
-          data-tooltip-content="Add new observer"
-        >
-          <FaPlus />
-        </button>
+            <div className="action-buttons">
+                <button
+                    className="create-button"
+                    onClick={handleAddObserverClick}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Add new observer"
+                >
+                    <FaPlus />
+                </button>
+                <button
+                    className="upload-button"
+                    onClick={handleUploadClick}
+                    data-tooltip-id="main-tooltip"
+                    data-tooltip-content="Upload observers"
+                >
+                    <FaUpload />
+                </button>
+            </div>
 
-        {editingObserver && (
-          <EditObserverModal
-            observer={editingObserver}
-            onClose={handleCloseEditModal}
-            onSave={handleSaveObserver}
-          />
-        )}
-{deletingObserver && (
-        <DeleteObserverModal
-            observer={deletingObserver}
-            onClose={handleCloseDeleteModal}
-            onConfirm={handleConfirmDelete}
-        />
-    )}
-        {isCreatingObserver && (
-          <CreateObserverModal
-            onClose={handleCloseCreateModal}
-            onCreate={handleCreateObserver}
-          />
-        )}
-        {editingTimeSlot && (
-          <EditTimeSlotModal
-            timeSlot={editingTimeSlot}
-            onClose={handleCloseEditTimeSlotModal}
-            onSave={handleSaveTimeSlot}
-            onDelete={handleDeleteTimeSlot}
-          />
-        )}
-        {isAddingTimeSlot && (
-          <AddTimeSlotModal
-            observerID={selectedObserverID}
-            day={selectedDay}
-            onClose={handleCloseAddTimeSlotModal}
-            onSave={handleSaveNewTimeSlot}
-          />
-        )}
-        <SuccessMessage
-          messages={successMessages}
-          onClose={handleCloseMessage}
-        />
-      </div>
+            {editingObserver && (
+                <EditObserverModal
+                    observer={editingObserver}
+                    onClose={handleCloseEditModal}
+                    onSave={handleSaveObserver}
+                />
+            )}
+            {deletingObserver && (
+                <DeleteObserverModal
+                    observer={deletingObserver}
+                    onClose={handleCloseDeleteModal}
+                    onConfirm={handleConfirmDelete}
+                />
+            )}
+            {isCreatingObserver && (
+                <CreateObserverModal
+                    onClose={handleCloseCreateModal}
+                    onCreate={handleCreateObserver}
+                />
+            )}
+            {editingTimeSlot && (
+                <EditTimeSlotModal
+                    timeSlot={editingTimeSlot}
+                    onClose={handleCloseEditTimeSlotModal}
+                    onSave={handleSaveTimeSlot}
+                    onDelete={handleDeleteTimeSlot}
+                />
+            )}
+            {isAddingTimeSlot && (
+                <AddTimeSlotModal
+                    observerID={selectedObserverID}
+                    day={selectedDay}
+                    onClose={handleCloseAddTimeSlotModal}
+                    onSave={handleSaveNewTimeSlot}
+                />
+            )}
+            {isUploading && (
+                <UploadObservers
+                    onClose={handleCloseUploadModal}
+                    onUploadSuccess={handleUploadSuccess}
+                />
+            )}
+            <SuccessMessage
+                messages={successMessages}
+                onClose={handleCloseMessage}
+            />
+        </div>
     );
 };
 
