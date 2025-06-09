@@ -23,4 +23,24 @@ router.delete('/:id', userObserverController.deleteUser); // Delete a user
 // Time Slot Routes
 router.post('/timeslots', userObserverController.addTimeSlot); // Add a new time slot
 
+
+// Import your controller functions and middleware
+const {
+    // ... your other functions
+    upload, // The multer instance from the controller
+    uploadObservers
+} = require('../controllers/userObserverController');
+
+// CORRECT
+const { authenticateToken, authorizeAdmin } = require('../middleware/authMiddleware.js');
+
+// Add the new route for bulk uploading observers
+router.post(
+    '/observers/upload',
+    authenticateToken, // Use your existing function for checking the token
+    authorizeAdmin,    // Use your existing function for checking the admin role
+    upload.single('file'),
+    uploadObservers
+);
+
 module.exports = router;
