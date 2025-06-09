@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaTimes, FaCheck, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSearch, FaTimes, FaCheck, FaExclamationTriangle, FaClipboardList } from 'react-icons/fa';
 import axios from 'axios';
+import DistributionOptionsModal from './Modals/DistributionOptionsModal';
 import './AssignmentsView.scss';
 
 const AssignmentsView = () => {
-    const [exams, setExams] = useState([]);
+    const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedSchedule, setSelectedSchedule] = useState(null);
+    const [showDistributionModal, setShowDistributionModal] = useState(false);
 
     useEffect(() => {
-        fetchExams();
+        fetchScheduleAssignments();
     }, []);
 
-    const fetchExams = async () => {
+    const fetchScheduleAssignments = async () => {
         try {
             const token = localStorage.getItem('authToken');
             const userRole = localStorage.getItem('userRole');
@@ -22,24 +25,24 @@ const AssignmentsView = () => {
                 throw new Error('Not authorized');
             }
 
-            const response = await axios.get('http://localhost:3000/api/exams', {
+            const response = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
                 headers: { 
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
 
-            console.log('Exams response:', response.data);
+            console.log('Schedule Assignments:', response.data);
             
-            if (response.data && Array.isArray(response.data)) {
-                setExams(response.data);
+            if (Array.isArray(response.data)) {
+                setSchedules(response.data);
             } else {
                 setError('Invalid data format received from server');
             }
             setLoading(false);
         } catch (err) {
             console.error('Detailed error:', err);
-            setError(err.response?.data?.message || 'Error fetching exams');
+            setError(err.response?.data?.message || 'Error fetching schedule assignments');
             setLoading(false);
         }
     };
@@ -48,23 +51,76 @@ const AssignmentsView = () => {
         setSearchTerm(e.target.value);
     };
 
-    const filteredExams = exams.filter(exam => 
-        exam.examName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        exam.courseName.toLowerCase().includes(searchTerm.toLowerCase())
+    const handleDistributeObservers = (schedule) => {
+        setSelectedSchedule(schedule);
+        setShowDistributionModal(true);
+    };
+
+    const handleAlgorithmSelection = async (algorithmId) => {
+        if (algorithmId === 'random') {
+            try {
+                const token = localStorage.getItem('authToken');
+                
+                const response = await axios.post(
+                    `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`, 
+                    {}, 
+                    {
+                        headers: { 
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+
+                // Show distribution results
+                const { assignments, totalExams, assignedExams } = response.data;
+                
+                alert(`Distribution Complete!\n` +
+                      `Total Exams: ${totalExams}\n` +
+                      `Assigned Exams: ${assignedExams}\n` +
+                      `Assignments: ${assignments.map(a => 
+                          `Exam ${a.examId}: Head - ${a.headObserver}, Secretary - ${a.secretary}`
+                      ).join('\n')}`
+                );
+
+                // Refresh the schedules to reflect new assignments
+                fetchScheduleAssignments();
+            } catch (error) {
+                console.error('Full Distribution Error:', error);
+                
+                // More detailed error message
+                const errorMessage = error.response?.data?.errorMessage || 
+                                     error.response?.data?.message || 
+                                     'Unknown error occurred';
+                
+                alert(`Distribution Failed: ${errorMessage}`);
+            }
+        }
+        
+        // Close the modal
+        setShowDistributionModal(false);
+    };
+
+    const filteredSchedules = schedules.filter(schedule => 
+        schedule.academicYear.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schedule.semester.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schedule.examType.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const getStatusBadge = (status) => {
         switch(status) {
-            case 'assigned':
-                return <span className="status-badge assigned"><FaCheck /> Assigned</span>;
-            case 'unassigned':
-                return <span className="status-badge unassigned"><FaExclamationTriangle /> Unassigned</span>;
+            case 'Fully Assigned':
+                return <span className="status-badge assigned"><FaCheck /> Fully Assigned</span>;
+            case 'Partially Assigned':
+                return <span className="status-badge partially-assigned"><FaExclamationTriangle /> Partially Assigned</span>;
+            case 'Not Assigned':
+                return <span className="status-badge unassigned"><FaTimes /> Not Assigned</span>;
             default:
                 return <span className="status-badge">{status}</span>;
         }
     };
 
-    if (loading) return <div className="loading">Loading assignments...</div>;
+    if (loading) return <div className="loading">Loading schedule assignments...</div>;
     if (error) return <div className="error">{error}</div>;
 
     return (
@@ -74,7 +130,7 @@ const AssignmentsView = () => {
                     <FaSearch className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search exams..."
+                        placeholder="Search schedules..."
                         value={searchTerm}
                         onChange={handleSearch}
                     />
@@ -86,36 +142,51 @@ const AssignmentsView = () => {
                 </div>
             </div>
 
-            <div className="assignments-table-container">
-                <table className="assignments-table">
+            <div className="schedules-table-container">
+                <table className="schedules-table">
                     <thead>
                         <tr>
-                            <th>Exam Name</th>
-                            <th>Course</th>
-                            <th>Date</th>
-                            <th>Time</th>
-                            <th>Room</th>
+                            <th>Academic Year</th>
+                            <th>Semester</th>
+                            <th>Exam Type</th>
+                            <th>Upload Date</th>
+                            <th>Total Exams</th>
+                            <th>Assigned Exams</th>
                             <th>Status</th>
-                            <th>Head Observer</th>
-                            <th>Secretary</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredExams.map((exam) => (
-                            <tr key={exam.examId}>
-                                <td>{exam.examName}</td>
-                                <td>{exam.courseName}</td>
-                                <td>{new Date(exam.examDate).toLocaleDateString()}</td>
-                                <td>{`${exam.startTime} - ${exam.endTime}`}</td>
-                                <td>{exam.roomNum}</td>
-                                <td>{getStatusBadge(exam.status)}</td>
-                                <td>{exam.headObserver || '-'}</td>
-                                <td>{exam.secretary || '-'}</td>
+                        {filteredSchedules.map((schedule) => (
+                            <tr key={schedule.scheduleId}>
+                                <td>{schedule.academicYear}</td>
+                                <td>{schedule.semester}</td>
+                                <td>{schedule.examType}</td>
+                                <td>{new Date(schedule.uploadDate).toLocaleDateString()}</td>
+                                <td>{schedule.totalExams}</td>
+                                <td>{schedule.assignedExams} / {schedule.totalExams}</td>
+                                <td>{getStatusBadge(schedule.assignmentStatus)}</td>
+                                <td>
+                                    <button 
+                                        className="distribute-btn"
+                                        onClick={() => handleDistributeObservers(schedule)}
+                                    >
+                                        <FaClipboardList /> Distribute
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {showDistributionModal && selectedSchedule && (
+                <DistributionOptionsModal
+                    schedule={selectedSchedule}
+                    onClose={() => setShowDistributionModal(false)}
+                    onSelectAlgorithm={handleAlgorithmSelection}
+                />
+            )}
         </div>
     );
 };

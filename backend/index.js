@@ -26,9 +26,11 @@ app.use(cors({
 app.use(express.json());
 app.use(bodyParser.json());
 
+    warn: console.warn
+};
+
+// Middleware for logging requests
 app.use((req, res, next) => {
-    console.log('Incoming Request:', req.method, req.url);
-    console.log('Headers:', req.headers);
     next();
 });
 
@@ -51,29 +53,29 @@ app.use((err, req, res, next) => {
 });
 
 // Initialize database and insert dummy data
-async function initialize() {
+async function initializeDatabase() {
     try {
         await initDB();
         console.log('Database tables created successfully!');
         await insertDummyData();
     } catch (err) {
-        console.error('Error during initialization:', err);
+        console.error(`Error during initialization: ${err}`);
         process.exit(1);
     }
 }
 
-initialize().then(() => {
-    // Start server
-    app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-    });
+// Start server
+const server = app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
 
 // Graceful shutdown
-process.on('SIGINT', async () => {
+process.on('SIGINT', () => {
     console.log('Closing server and database connection...');
-    await client.end();
-    process.exit();
+    server.close(() => {
+        client.end();
+        process.exit(0);
+    });
 });
 
 app.options('*', cors()); // Handle preflight requests for all routes

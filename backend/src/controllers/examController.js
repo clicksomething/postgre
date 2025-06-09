@@ -4,6 +4,8 @@ const multer = require('multer'); // For file uploads
 const xlsx = require('xlsx'); // For parsing Excel files
 const storage = multer.memoryStorage(); // Store file in memory
 
+const AssignmentService = require('../services/assignmentService');
+
 // File filter for multer
 const fileFilter = (req, file, cb) => {
     if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
@@ -729,7 +731,500 @@ const getSchedules = async (req, res) => {
     }
 };
 
-// Get schedule details
+// Helper function to shuffle an array
+const shuffleArray = (array) => {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+};
+
+function hasTimeConflict(existingExam, newExam) {
+    // If exams are on different days, no conflict
+    if (new Date(existingExam.examdate).toDateString() !== new Date(newExam.examdate).toDateString()) {
+        return false;
+    }
+
+    // Convert times to minutes since midnight for precise comparison
+    const convertToMinutes = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+
+    const existingStart = convertToMinutes(existingExam.starttime.split(' ')[0]);
+    const existingEnd = convertToMinutes(existingExam.endtime.split(' ')[0]);
+    const newStart = convertToMinutes(newExam.starttime.split(' ')[0]);
+    const newEnd = convertToMinutes(newExam.endtime.split(' ')[0]);
+
+    // Check for actual time overlap
+    const hasOverlap = !(newEnd <= existingStart || newStart >= existingEnd);
+
+    console.log(`🔍 [TIME CONFLICT] Detailed Check:
+        Existing Exam: ${existingExam.coursename || 'Unknown'} 
+        Time: ${existingExam.starttime} - ${existingExam.endtime}
+        New Exam: ${newExam.coursename || 'Unknown'}
+        Time: ${newExam.starttime} - ${newExam.endtime}
+        Overlap: ${hasOverlap}
+    `);
+
+    return hasOverlap;
+}
+
+function findAvailableObserver(exam, observerPool, mustBeDr) {
+    console.log(`🔍 [OBSERVER SELECTION] Finding observer for exam:
+        Date: ${exam.examdate}
+        Time: ${exam.starttime} - ${exam.endtime}
+        Is Head Observer: ${mustBeDr}
+        Total Observers: ${observerPool.length}
+    `);
+
+    // Filter observers based on Dr. requirement and availability
+    const availableObservers = observerPool.filter(observer => {
+        // Check Dr. requirement
+        const meetsDrRequirement = !mustBeDr || observer.title.toLowerCase().includes('dr');
+
+        // Check if observer has any conflicting exams
+        const hasConflict = assignedExams.get(observer.observerid)?.some(assignedExam => 
+            hasTimeConflict(assignedExam, exam)
+        ) || false;
+
+        console.log(`🔍 [OBSERVER SELECTION] Checking observer: ${observer.name} (${observer.title})
+            Meets Dr Requirement: ${meetsDrRequirement}
+            Has Conflict: ${hasConflict}
+        `);
+
+        return meetsDrRequirement && !hasConflict;
+    });
+
+    console.log(`🔍 [OBSERVER SELECTION] Available Observers: ${availableObservers.map(o => o.name).join(', ')}`);
+
+    // Return first available observer
+    return availableObservers.length > 0 ? availableObservers[0] : null;
+}
+
+// Random distribution algorithm
+const randomDistribution = async (req, res) => {
+    console.log(`🚨 [DISTRIBUTION] Starting distribution for Schedule ID: ${req.params.scheduleId}`);
+    console.log(`🚨 [DISTRIBUTION] Full request details:`, {
+        params: req.params,
+        body: req.body,
+        headers: {
+            authorization: req.headers.authorization ? 'PRESENT' : 'MISSING'
+        }
+    });
+
+    try {
+        const { scheduleId } = req.params;
+
+        // 0. Validate input
+        if (!scheduleId) {
+            console.error('🚨 [DISTRIBUTION] No Schedule ID provided');
+            return res.status(400).json({ message: 'Schedule ID is required' });
+        }
+
+        // Start transaction
+        await client.query('BEGIN');
+
+        // 1. CLEAR EXISTING ASSIGNMENTS
+        console.log(`🚨 [DISTRIBUTION] Clearing existing assignments for Schedule ID: ${scheduleId}`);
+        const clearResult = await client.query(`
+            UPDATE ExamSchedule 
+            SET Status = 'unassigned', 
+                ExamHead = NULL, 
+                ExamSecretary = NULL
+            WHERE ScheduleID = $1
+            RETURNING ExamID
+        `, [scheduleId]);
+
+        console.log(`🚨 [DISTRIBUTION] Cleared ${clearResult.rowCount} exam assignments`);
+
+        // Delete existing exam assignments
+        await client.query(`
+            DELETE FROM ExamAssignment 
+            WHERE ScheduleID = $1
+        `, [scheduleId]);
+
+        // 2. Fetch unassigned exams
+        const examsResult = await client.query(
+            `SELECT e.*, c.CourseName, r.RoomNum
+             FROM ExamSchedule e
+             JOIN Course c ON e.CourseID = c.CourseID
+             JOIN Room r ON e.RoomID = r.RoomID
+             WHERE e.ScheduleID = $1
+             ORDER BY e.ExamDate, e.StartTime`,
+            [scheduleId]
+        );
+
+        const exams = examsResult.rows;
+        console.log(`🚨 [DISTRIBUTION] Total unassigned exams: ${exams.length}`);
+
+        // 3. Fetch ALL observers with their time slots
+        const observersResult = await client.query(
+            `SELECT 
+                o.ObserverID, 
+                o.Name, 
+                o.Title, 
+                o.Availability,
+                json_agg(json_build_object(
+                    'timeSlotID', ts.TimeSlotID, 
+                    'day', ts.Day, 
+                    'startTime', ts.StartTime, 
+                    'endTime', ts.EndTime
+                )) as TimeSlots
+             FROM Observer o
+             LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
+             GROUP BY o.ObserverID, o.Name, o.Title, o.Availability`
+        );
+
+        const observers = observersResult.rows;
+        console.log(`🚨 [DISTRIBUTION] Total observers: ${observers.length}`);
+
+        // Separate observers into Dr. and non-Dr.
+        const drObservers = observers.filter(obs => 
+            obs.title && obs.title.toLowerCase().includes('dr')
+        );
+        const nonDrObservers = observers.filter(obs => 
+            !obs.title || !obs.title.toLowerCase().includes('dr')
+        );
+
+        console.log(`🚨 [DISTRIBUTION] Dr. Observers: ${drObservers.length}`);
+        console.log(`🚨 [DISTRIBUTION] Non-Dr. Observers: ${nonDrObservers.length}`);
+
+        // Track assigned exams to check for conflicts
+        const assignedExams = new Map();
+
+        // Shuffle observers
+        const shuffledDrObservers = shuffleArray([...drObservers]);
+        const shuffledNonDrObservers = shuffleArray([...nonDrObservers]);
+        const shuffledAllObservers = shuffleArray([...observers]);
+
+        // Helper function to check time conflict
+        const hasTimeConflictWithPreviousExams = (exam, previousExams) => {
+            return previousExams.some(prevExam => 
+                hasTimeConflict(exam, prevExam)
+            );
+        };
+
+        // Helper function to find observers already assigned on the same day
+        const findObserversAssignedOnSameDay = (exam) => {
+            const examDate = new Date(exam.examdate).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+            
+            const sameDAyObservers = new Set();
+            for (const [observerId, assignedExamsList] of assignedExams.entries()) {
+                const hasExamOnSameDay = assignedExamsList.some(assignedExam => {
+                    const assignedExamDate = new Date(assignedExam.examdate).toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+                    return assignedExamDate === examDate;
+                });
+
+                if (hasExamOnSameDay) {
+                    sameDAyObservers.add(observerId);
+                }
+            }
+
+            return observers.filter(obs => sameDAyObservers.has(obs.observerid));
+        };
+
+        // Function to find an available observer
+        const findAvailableObserver = (exam, observerPool, isHeadObserver = false) => {
+            console.log(`🔍 [OBSERVER SELECTION] Finding observer for exam:
+                Date: ${exam.examdate}
+                Time: ${exam.starttime} - ${exam.endtime}
+                Is Head Observer: ${isHeadObserver}
+                Total Observers: ${observerPool.length}
+            `);
+
+            // Prioritize observers already assigned on the same day
+            const sameDAyObservers = findObserversAssignedOnSameDay(exam);
+            
+            console.log(`🔍 [OBSERVER SELECTION] Same Day Observers:
+                Total: ${sameDAyObservers.length}
+                Names: ${sameDAyObservers.map(obs => obs.name).join(', ')}
+            `);
+
+            // Separate same-day observers by Dr. title
+            const sameDAyDrObservers = sameDAyObservers.filter(obs => 
+                obs.title && obs.title.toLowerCase().includes('dr')
+            );
+            const sameDAyNonDrObservers = sameDAyObservers.filter(obs => 
+                !obs.title || !obs.title.toLowerCase().includes('dr')
+            );
+
+            // Try to find an available observer
+            const findAvailableObserverInPool = (pool, mustBeDr = false) => {
+                console.log(`🔍 [OBSERVER SELECTION] Searching in pool:
+                    Pool Size: ${pool.length}
+                    Must Be Dr: ${mustBeDr}
+                `);
+
+                return pool.find(obs => {
+                    console.log(`🔍 [OBSERVER SELECTION] Checking observer: ${obs.name} (${obs.title})`);
+
+                    // Check Dr. title requirement first
+                    if (mustBeDr && (!obs.title || !obs.title.toLowerCase().includes('dr'))) {
+                        console.log(`🚫 [OBSERVER SELECTION] Skipped: Not a Dr.`);
+                        return false;
+                    }
+
+                    // If observer has no previous exam assignments
+                    if (!assignedExams.has(obs.observerid)) {
+                        const timeSlotConflict = hasTimeConflict(
+                            exam,
+                            obs
+                        );
+
+                        console.log(`🔍 [OBSERVER SELECTION] New Observer Time Slot Check:
+                            Time Slot Conflict: ${timeSlotConflict}
+                        `);
+
+                        return !timeSlotConflict;
+                    }
+
+                    // Get previously assigned exams for this observer
+                    const previousExams = assignedExams.get(obs.observerid);
+                    
+                    // Check if this is the same day as previous exams
+                    const isSameDay = previousExams.some(prevExam => {
+                        const prevExamDate = new Date(prevExam.examdate);
+                        const currentExamDate = new Date(exam.examdate);
+                        return prevExamDate.toLocaleDateString() === currentExamDate.toLocaleDateString();
+                    });
+
+                    // If not on the same day, check time slots
+                    if (!isSameDay) {
+                        const timeSlotConflict = hasTimeConflict(
+                            exam,
+                            obs
+                        );
+
+                        console.log(`🔍 [OBSERVER SELECTION] Different Day Time Slot Check:
+                            Time Slot Conflict: ${timeSlotConflict}
+                        `);
+
+                        return !timeSlotConflict;
+                    }
+
+                    // On the same day, check for time conflicts with previous exams
+                    const hasConflict = previousExams.some(prevExam => 
+                        hasTimeConflict(exam, prevExam)
+                    );
+
+                    console.log(`🔍 [OBSERVER SELECTION] Same Day Conflict Check:
+                        Is Same Day: ${isSameDay}
+                        Has Conflict: ${hasConflict}
+                    `);
+
+                    // If no time conflict, the observer is available
+                    return !hasConflict;
+                });
+            };
+
+            // Try to find an observer
+            let availableObserver = null;
+
+            // First, try same-day Dr. observers if looking for head observer
+            if (isHeadObserver) {
+                availableObserver = findAvailableObserverInPool(sameDAyDrObservers, true);
+            }
+
+            // If no same-day Dr. observers, try same-day non-Dr. observers
+            if (!availableObserver) {
+                availableObserver = findAvailableObserverInPool(sameDAyObservers);
+            }
+
+            // If no same-day observers, try from the original pool
+            if (!availableObserver) {
+                // Separate observers by Dr. title
+                const drObservers = observerPool.filter(obs => 
+                    obs.title && obs.title.toLowerCase().includes('dr')
+                );
+                const nonDrObservers = observerPool.filter(obs => 
+                    !obs.title || !obs.title.toLowerCase().includes('dr')
+                );
+
+                // Try Dr. observers first if looking for head observer
+                if (isHeadObserver) {
+                    availableObserver = findAvailableObserverInPool(drObservers, true);
+                }
+
+                // If no Dr. observers, try any observer
+                if (!availableObserver) {
+                    availableObserver = findAvailableObserverInPool(observerPool);
+                }
+            }
+
+            console.log(`🔍 [OBSERVER SELECTION] Final Result:
+                Available Observer: ${availableObserver ? availableObserver.name : 'NONE'}
+            `);
+
+            return availableObserver;
+        };
+
+        // Assign observers to exams
+        const assignments = [];
+        for (const exam of exams) {
+            console.log(`\n🚨 [DISTRIBUTION] Processing Exam: ${exam.examid}`);
+            console.log(`🚨 [DISTRIBUTION] Exam Details:
+                Date: ${exam.examdate}
+                Start Time: ${exam.starttime}
+                End Time: ${exam.endtime}
+                Course: ${exam.coursename || 'N/A'}
+                Room: ${exam.roomnum || 'N/A'}
+            `);
+
+            // Log current state of assigned exams before processing
+            console.log('🚨 [DISTRIBUTION] Current Assigned Exams:');
+            for (const [observerId, assignedExamsList] of assignedExams.entries()) {
+                const observer = observers.find(obs => obs.observerid === observerId);
+                console.log(`Observer: ${observer ? observer.name : 'Unknown'} (ID: ${observerId})`);
+                assignedExamsList.forEach(assignedExam => {
+                    console.log(`  - Exam Date: ${assignedExam.examdate}, Time: ${assignedExam.starttime}-${assignedExam.endtime}`);
+                });
+            }
+
+            // Find available head observer (prioritize Dr. title)
+            let availableHeadObserver = findAvailableObserver(exam, shuffledDrObservers, true);
+
+            // If no Dr. observer available, try any observer
+            if (!availableHeadObserver) {
+                availableHeadObserver = findAvailableObserver(exam, shuffledAllObservers, true);
+            }
+
+            if (!availableHeadObserver) {
+                console.warn(`🚨 [DISTRIBUTION] No available head observers for exam ${exam.examid}`);
+                assignments.push({
+                    examId: exam.examid,
+                    headObserver: null,
+                    secretary: null,
+                    reason: 'No head observers available'
+                });
+                continue;
+            }
+
+            console.log(`🚨 [DISTRIBUTION] Selected Head Observer: 
+                Name: ${availableHeadObserver.name} 
+                Title: ${availableHeadObserver.title}
+                Observer ID: ${availableHeadObserver.observerid}
+            `);
+
+            // Track assigned exams for this observer
+            if (!assignedExams.has(availableHeadObserver.observerid)) {
+                assignedExams.set(availableHeadObserver.observerid, []);
+            }
+            assignedExams.get(availableHeadObserver.observerid).push(exam);
+
+            // Find available secretary
+            const availableSecretaries = [
+                ...shuffledNonDrObservers,
+                ...shuffledDrObservers,
+                ...shuffledAllObservers.filter(o => o.observerid !== availableHeadObserver.observerid)
+            ];
+
+            const availableSecretary = findAvailableObserver(exam, availableSecretaries, false);
+
+            if (!availableSecretary) {
+                console.warn(`🚨 [DISTRIBUTION] No available secretary for exam ${exam.examid}`);
+                assignments.push({
+                    examId: exam.examid,
+                    headObserver: availableHeadObserver.observerid,
+                    secretary: null,
+                    reason: 'No secretary available'
+                });
+                continue;
+            }
+
+            console.log(`🚨 [DISTRIBUTION] Selected Secretary: 
+                Name: ${availableSecretary.name} 
+                Title: ${availableSecretary.title}
+                Observer ID: ${availableSecretary.observerid}
+            `);
+
+            // Track assigned exams for secretary
+            if (!assignedExams.has(availableSecretary.observerid)) {
+                assignedExams.set(availableSecretary.observerid, []);
+            }
+            assignedExams.get(availableSecretary.observerid).push(exam);
+
+            // Log final assignment tracking
+            console.log('🚨 [DISTRIBUTION] Updated Assigned Exams:');
+            for (const [observerId, assignedExamsList] of assignedExams.entries()) {
+                const observer = observers.find(obs => obs.observerid === observerId);
+                console.log(`Observer: ${observer ? observer.name : 'Unknown'} (ID: ${observerId})`);
+                assignedExamsList.forEach(assignedExam => {
+                    console.log(`  - Exam Date: ${assignedExam.examdate}, Time: ${assignedExam.starttime}-${assignedExam.endtime}`);
+                });
+            }
+
+            // Update exam status and observers
+            await client.query(
+                `UPDATE ExamSchedule 
+                 SET Status = 'assigned', 
+                     ExamHead = $2, 
+                     ExamSecretary = $3 
+                 WHERE ExamID = $1`,
+                [exam.examid, availableHeadObserver.observerid, availableSecretary.observerid]
+            );
+
+            // Insert into ExamAssignment with ON CONFLICT handling
+            const assignmentResult = await client.query(
+                `INSERT INTO ExamAssignment 
+                 (ExamID, ScheduleID, ObserverID, Role, Status) 
+                 VALUES 
+                 ($1, $4, $2, 'head', 'active'),
+                 ($1, $4, $3, 'secretary', 'active')
+                 ON CONFLICT (ExamID, ObserverID, ScheduleID) DO NOTHING
+                 RETURNING *`,
+                [exam.examid, availableHeadObserver.observerid, availableSecretary.observerid, scheduleId]
+            );
+
+            console.log(`🚨 [DISTRIBUTION] Assignment result for Exam ${exam.examid}:
+                Head Observer: ${availableHeadObserver.name}
+                Secretary: ${availableSecretary.name}
+                Rows Inserted: ${assignmentResult.rowCount}
+            `);
+
+            assignments.push({
+                examId: exam.examid,
+                headObserver: availableHeadObserver.observerid,
+                secretary: availableSecretary.observerid
+            });
+        }
+
+        // Commit the transaction
+        await client.query('COMMIT');
+
+        console.log(`🚨 [DISTRIBUTION] Distribution completed for Schedule ID: ${scheduleId}`);
+        res.json({
+            message: "Distribution complete",
+            scheduleId: scheduleId,
+            totalExams: exams.length,
+            assignedExams: assignments.filter(a => a.secretary !== null).length,
+            assignments: assignments
+        });
+    } catch (error) {
+        // Rollback the transaction in case of error
+        await client.query('ROLLBACK');
+        console.error('🚨 [DISTRIBUTION] Error in randomDistribution:', {
+            errorName: error.name,
+            errorMessage: error.message,
+            errorStack: error.stack,
+            errorCode: error.code,
+            errorDetail: error.detail,
+            errorConstraint: error.constraint
+        });
+        res.status(500).json({
+            message: "Failed to distribute observers",
+            error: error.message,
+            details: {
+                name: error.name,
+                code: error.code,
+                constraint: error.constraint,
+                stack: error.stack
+            }
+        });
+    }
+};
+
 const getScheduleDetails = async (req, res) => {
     try {
         const { scheduleId } = req.params;
@@ -991,14 +1486,102 @@ const updateSchedule = async (req, res) => {
     }
 };
 
-// Make sure the exports include ALL functions
+const getAllExamsWithAssignments = async (req, res) => {
+    try {
+        console.log('User role:', req.user.role); // Log the user's role for debugging
+
+        const query = `
+            SELECT 
+                es.ExamID as "examId",
+                es.ExamName as "examName",
+                c.CourseName as "courseName",
+                es.ExamDate as "examDate",
+                es.StartTime as "startTime",
+                es.EndTime as "endTime",
+                r.RoomNum as "roomNum",
+                es.Status as "status",
+                o1.Name as "headObserver",
+                o2.Name as "secretary"
+            FROM ExamSchedule es
+            LEFT JOIN Course c ON es.CourseID = c.CourseID
+            LEFT JOIN Room r ON es.RoomID = r.RoomID
+            LEFT JOIN Observer o1 ON es.ExamHead = o1.ObserverID
+            LEFT JOIN Observer o2 ON es.ExamSecretary = o2.ObserverID
+        `;
+
+        console.log('Executing query:', query);
+
+        const result = await client.query(query);
+        
+        console.log('Query result:', result.rows);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('FULL Error details:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        res.status(500).json({ 
+            message: 'Error fetching exams', 
+            errorName: error.name,
+            errorMessage: error.message,
+            errorStack: error.stack 
+        });
+    }
+};
+
+const getScheduleAssignments = async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                s.UploadID as "scheduleId",
+                s.AcademicYear as "academicYear",
+                s.Semester as "semester",
+                s.ExamType as "examType",
+                s.UploadedAt as "uploadDate",
+                s.Status as "scheduleStatus",
+                COUNT(es.ExamID) as "totalExams",
+                SUM(CASE WHEN es.ExamHead IS NOT NULL AND es.ExamSecretary IS NOT NULL THEN 1 ELSE 0 END) as "assignedExams",
+                CASE 
+                    WHEN SUM(CASE WHEN es.ExamHead IS NULL OR es.ExamSecretary IS NULL THEN 1 ELSE 0 END) = 0 THEN 'Fully Assigned'
+                    WHEN SUM(CASE WHEN es.ExamHead IS NOT NULL OR es.ExamSecretary IS NOT NULL THEN 1 ELSE 0 END) > 0 THEN 'Partially Assigned'
+                    ELSE 'Not Assigned'
+                END as "assignmentStatus"
+            FROM 
+                UploadedSchedules s
+            LEFT JOIN 
+                ExamSchedule es ON s.UploadID = es.ScheduleID
+            GROUP BY 
+                s.UploadID, s.AcademicYear, s.Semester, s.ExamType, s.UploadedAt, s.Status
+            ORDER BY 
+                s.UploadedAt DESC
+        `;
+
+        const result = await client.query(query);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching schedule assignments:', error);
+        res.status(500).json({ 
+            message: 'Error fetching schedule assignments', 
+            error: error.message 
+        });
+    }
+};
+
 module.exports = {
-    uploadExamSchedule,
-    getSchedules,
-    getScheduleDetails,
+    createExam,
+    getAllExams,
+    getExamById,
     updateExam,
     deleteExam,
     deleteSchedule,
+    uploadExamSchedule,
+    getSchedules,
+    getScheduleDetails,
+    checkScheduleUpdate,
     updateSchedule,
-    checkScheduleUpdate
+    getAllExamsWithAssignments,
+    getScheduleAssignments,
+    randomDistribution
 };

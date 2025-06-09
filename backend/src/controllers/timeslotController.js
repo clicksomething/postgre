@@ -5,6 +5,18 @@ const { client } = require('../../database/db');// Adjust according to your data
 const addTimeSlot = async (req, res) => {
     const { startTime, endTime, day, observerID } = req.body;
 
+    // Log raw input for debugging
+    console.log('Time Slot Insertion Request:', {
+        startTime, 
+        endTime, 
+        day, 
+        observerID,
+        startTimeType: typeof startTime,
+        endTimeType: typeof endTime,
+        dayType: typeof day,
+        observerIDType: typeof observerID
+    });
+
     // Validate required fields
     if (!startTime) {
         return res.status(400).json({ message: 'Start time is required' });
@@ -40,6 +52,26 @@ const addTimeSlot = async (req, res) => {
             });
         }
 
+        // Validate and potentially adjust times for cross-midnight slots
+        let adjustedStartTime = startTime;
+        let adjustedEndTime = endTime;
+        let adjustedDay = day;
+
+        // If end time is earlier than start time, assume it crosses midnight
+        const startTimeObj = new Date(`1970-01-01T${startTime}`);
+        const endTimeObj = new Date(`1970-01-01T${endTime}`);
+
+        if (endTimeObj < startTimeObj) {
+            console.log('Cross-midnight time slot detected');
+            // Adjust day for the end time
+            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            const currentDayIndex = days.indexOf(day.toLowerCase());
+            const nextDayIndex = (currentDayIndex + 1) % 7;
+            
+            console.log('Original Day:', day);
+            console.log('Next Day:', days[nextDayIndex]);
+        }
+
         // Check for existing time slots for the same observer on the same day and overlapping times
         const existingTimeSlot = await client.query(
             `SELECT * FROM TimeSlot 
@@ -49,7 +81,7 @@ const addTimeSlot = async (req, res) => {
                  (StartTime < $4 AND EndTime > $4) OR
                  (StartTime >= $3 AND EndTime <= $4)
              )`,
-            [observerID, day, startTime, endTime]
+            [observerID, adjustedDay, adjustedStartTime, adjustedEndTime]
         );
 
         if (existingTimeSlot.rows.length > 0) {
@@ -60,14 +92,21 @@ const addTimeSlot = async (req, res) => {
         const result = await client.query(
             `INSERT INTO TimeSlot (StartTime, EndTime, day, ObserverID)
              VALUES ($1, $2, $3, $4) RETURNING *`,
-            [startTime, endTime, day, observerID]
+            [adjustedStartTime, adjustedEndTime, adjustedDay, observerID]
         );
+
+        // Log successful insertion
+        console.log('Time Slot Inserted Successfully:', result.rows[0]);
 
         // Return the newly created time slot
         return res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Error adding time slot:', error);
-        return res.status(500).json({ message: 'Internal Server Error' });
+        return res.status(500).json({ 
+            message: 'Internal Server Error',
+            errorDetails: error.message,
+            errorStack: error.stack
+        });
     }
 };
 const updateTimeSlot = async (req, res) => {

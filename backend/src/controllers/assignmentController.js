@@ -72,16 +72,44 @@ const assignmentController = {
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            console.log(`[ASSIGNMENT CONTROLLER] Authentication Details:`, {
+                roleId: decoded.roleId,
+                userId: decoded.userId
+            });
+
             if (decoded.roleId !== 2) { // Admin role ID
+                console.warn(`[ASSIGNMENT CONTROLLER] Unauthorized access attempt`, {
+                    roleId: decoded.roleId,
+                    userId: decoded.userId
+                });
                 return res.status(403).json({ message: 'Only administrators can assign observers' });
             }
 
             const { examId } = req.params;
-            const result = await AssignmentService.assignObserversToExam(examId);
-            res.json(result);
-        } catch (error) {
-            console.error('Error assigning observers:', error);
-            res.status(500).json({ message: 'Failed to assign observers' });
+            console.log(`[ASSIGNMENT CONTROLLER] Attempting to assign observers for Exam ID: ${examId}`);
+
+            try {
+                const result = await AssignmentService.assignObserversToExam(examId);
+                console.log(`[ASSIGNMENT CONTROLLER] Assignment Result:`, JSON.stringify(result));
+                res.json(result);
+            } catch (assignmentError) {
+                console.error(`[ASSIGNMENT CONTROLLER] Assignment Error Details:`, {
+                    message: assignmentError.message,
+                    stack: assignmentError.stack,
+                    name: assignmentError.name
+                });
+                res.status(500).json({ 
+                    message: 'Failed to assign observers', 
+                    errorDetails: assignmentError.message 
+                });
+            }
+        } catch (authError) {
+            console.error(`[ASSIGNMENT CONTROLLER] Authentication Error:`, {
+                message: authError.message,
+                stack: authError.stack,
+                name: authError.name
+            });
+            res.status(401).json({ message: 'Authentication failed' });
         }
     },
 

@@ -1,0 +1,124 @@
+.distribution-options-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .distribution-options-modal {
+        background-color: white;
+        border-radius: 12px;
+        width: 800px;
+        max-width: 95%;
+        max-height: 90%;
+        overflow-y: auto;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        animation: slideUp 0.3s ease;
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+
+            h2 {
+                margin: 0;
+                color: #333;
+                font-size: 1.5rem;
+            }
+
+            .close-btn {
+                background: none;
+                border: none;
+                color: #888;
+                font-size: 1.5rem;
+                cursor: pointer;
+                transition: color 0.3s ease;
+
+                &:hover {
+                    color: #333;
+                }
+            }
+        }
+
+        .modal-content {
+            padding: 20px;
+
+            .schedule-info, .schedule-exams-info {
+                color: #666;
+                margin-bottom: 15px;
+                text-align: center;
+            }
+
+            .distribution-algorithms {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+
+                .algorithm-option {
+                    display: flex;
+                    align-items: center;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 10px;
+                    padding: 15px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+
+                    &:hover {
+                        border-color: #3498db;
+                        box-shadow: 0 5px 15px rgba(52, 152, 219, 0.1);
+                        transform: translateY(-5px);
+                    }
+
+                    .algorithm-icon {
+                        font-size: 2.5rem;
+                        color: #3498db;
+                        margin-right: 15px;
+                    }
+
+                    .algorithm-details {
+                        flex-grow: 1;
+
+                        h3 {
+                            margin: 0 0 10px 0;
+                            color: #333;
+                        }
+
+                        p {
+                            color: #666;
+                            margin: 0 0 10px 0;
+                            font-size: 0.9rem;
+                        }
+
+                        .algorithm-constraints {
+                            font-size: 0.8rem;
+                            color: #888;
+
+                            ul {
+                                padding-left: 20px;
+                                margin: 5px 0 0 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+} 

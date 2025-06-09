@@ -22,6 +22,8 @@ const AddTimeSlotModal = ({ observerID, day, onClose, onSave }) => {
             observerID: Number(observerID), // Ensure observerID is a number
         };
         
+        console.log('New time slot:', newTimeSlot);
+
         onSave(newTimeSlot);
         onClose();
     };

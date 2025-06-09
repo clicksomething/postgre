@@ -567,18 +567,47 @@ const deleteObserver = async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Start a transaction
+    await client.query('BEGIN');
+
+    // 1. Remove the observer from ExamAssignment
+    await client.query(`
+      DELETE FROM ExamAssignment 
+      WHERE ObserverID = $1
+    `, [id]);
+
+    // 2. Update ExamSchedule to remove references to this observer
+    await client.query(`
+      UPDATE ExamSchedule 
+      SET ExamHead = NULL, 
+          ExamSecretary = NULL, 
+          Status = 'unassigned'
+      WHERE ExamHead = $1 OR ExamSecretary = $1
+    `, [id]);
+
+    // 3. Delete the observer
     const result = await client.query(`
       DELETE FROM Observer WHERE ObserverID = $1 RETURNING ObserverID
     `, [id]);
 
+    // Check if observer was actually deleted
     if (result.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Observer not found' });
     }
 
+    // Commit the transaction
+    await client.query('COMMIT');
+
     res.status(200).json({ message: 'Observer deleted successfully' });
   } catch (err) {
+    // Rollback the transaction in case of error
+    await client.query('ROLLBACK');
     console.error('Error deleting observer:', err);
-    res.status(500).json({ message: 'Error deleting observer' });
+    res.status(500).json({ 
+      message: 'Error deleting observer', 
+      error: err.message 
+    });
   }
 };
 
