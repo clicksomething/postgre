@@ -26,11 +26,17 @@ app.use(cors({
 app.use(express.json());
 app.use(bodyParser.json());
 
+// Basic console logging instead of winston
+const logger = {
+    info: console.log,
+    error: console.error,
     warn: console.warn
 };
 
 // Middleware for logging requests
 app.use((req, res, next) => {
+    const logEntry = `${req.method} ${req.url} - ${req.get('user-agent') || 'Unknown Agent'}`;
+    console.log(logEntry);
     next();
 });
 
@@ -48,7 +54,7 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error(`Error stack: ${err.stack}`);
     res.status(500).json({ message: 'Something went wrong!' });
 });
 
