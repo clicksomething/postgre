@@ -265,8 +265,6 @@ class GeneticAssignmentService {
                 // Update usage
                 this.updateObserverUsage(observerUsage, head.observerid, exam);
                 this.updateObserverUsage(observerUsage, secretary.observerid, exam);
-                
-                debugStats.successfulAssignments++;
             } else {
                 // No valid assignment
                 chromosome.push({
@@ -274,10 +272,6 @@ class GeneticAssignmentService {
                     headId: null,
                     secretaryId: null
                 });
-                
-                debugStats.failedAssignments++;
-                const reason = `Only ${availableObservers.length} observers available`;
-                debugStats.failureReasons.set(reason, (debugStats.failureReasons.get(reason) || 0) + 1);
             }
         }
         
