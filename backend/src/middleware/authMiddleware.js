@@ -7,8 +7,8 @@ let adminRoleId = null;
 const getAdminRoleId = async () => {
     if (adminRoleId) return adminRoleId;
     try {
-        const result = await client.query(`SELECT RoleID FROM Roles WHERE RoleName = 'admin'`);
-        adminRoleId = result.rows[0]?.RoleID;
+        const result = await client.query(`SELECT roleid FROM roles WHERE rolename = 'admin'`);
+        adminRoleId = result.rows[0]?.roleid;
         return adminRoleId;
     } catch (err) {
         console.error('Database error:', err);

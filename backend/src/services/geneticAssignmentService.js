@@ -10,14 +10,17 @@ class GeneticAssignmentService {
         this.mutationRate = options.mutationRate || 0.1;
         this.crossoverRate = options.crossoverRate || 0.7;
         this.elitismRate = options.elitismRate || 0.1;
-        this.tournamentSize = options.tournamentSize || 3;
+        this.tournamentSize = options.tournamentSize || 5;
         
-        // Performance tracking
+        // Add option for deterministic initialization
+        this.useDeterministicInit = options.useDeterministicInit || false;
+        
+        // Performance tracking - initialize without startTime
         this.performanceMetrics = {
-            startTime: Date.now(),
+            startTime: null,  // Will be set when assignment starts
             generations: [],
             bestFitness: 0,
-            finalSolution: null
+            finalAssignments: 0
         };
     }
 
@@ -25,6 +28,9 @@ class GeneticAssignmentService {
      * Main entry point for genetic algorithm assignment
      */
     async assignObserversWithGA(examIds) {
+        // Start the timer when assignment actually begins
+        this.performanceMetrics.startTime = Date.now();
+        
         try {
             await client.query('BEGIN');
             
@@ -34,16 +40,17 @@ class GeneticAssignmentService {
             // 2. Initialize population
             let population = this.initializePopulation(data);
             
-            // 3. Evolve through generations
+            // 3. Evolution loop
             for (let gen = 0; gen < this.generations; gen++) {
                 // Evaluate fitness
                 population = this.evaluateFitness(population, data);
                 
-                // Track best solution
+                // Find best individual
                 const bestIndividual = population.reduce((best, ind) => 
                     ind.fitness > best.fitness ? ind : best
                 );
                 
+                // Store progress
                 this.performanceMetrics.generations.push({
                     generation: gen,
                     bestFitness: bestIndividual.fitness,
@@ -52,7 +59,6 @@ class GeneticAssignmentService {
                 
                 // Check for early convergence
                 if (bestIndividual.fitness === 1.0) {
-                    console.log(`GA converged at generation ${gen}`);
                     break;
                 }
                 
@@ -122,7 +128,8 @@ class GeneticAssignmentService {
                 ) as time_slots
             FROM Observer o
             LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
-            WHERE o.Availability IN ('full-time', 'part-time')
+            WHERE o.Availability IS NULL 
+               OR LOWER(o.Availability::text) IN ('full-time', 'part-time')
             GROUP BY o.ObserverID, o.Name, o.Title, o.Availability, o.Email, o.PhoneNum
         `);
         
@@ -153,20 +160,79 @@ class GeneticAssignmentService {
     }
 
     /**
-     * Initialize random population
+     * Initialize population with random chromosomes
      */
     initializePopulation(data) {
         const population = [];
         
-        for (let i = 0; i < this.populationSize; i++) {
+        // If deterministic init is enabled, create first individual using greedy approach
+        if (this.useDeterministicInit && this.populationSize > 0) {
+            const greedyChromosome = this.createGreedyChromosome(data);
+            population.push({ chromosome: greedyChromosome, fitness: 0, isGreedy: true });
+        }
+        
+        // Fill rest with random chromosomes
+        while (population.length < this.populationSize) {
             const chromosome = this.createRandomChromosome(data);
-            population.push({
-                chromosome,
-                fitness: 0
-            });
+            population.push({ chromosome, fitness: 0, isGreedy: false });
         }
         
         return population;
+    }
+
+    /**
+     * Create a chromosome using greedy algorithm (deterministic)
+     */
+    createGreedyChromosome(data) {
+        const chromosome = [];
+        const observerUsage = new Map();
+        
+        // Sort exams by date and time for consistent ordering
+        const sortedExams = [...data.exams].sort((a, b) => {
+            const dateCompare = new Date(a.examdate) - new Date(b.examdate);
+            if (dateCompare !== 0) return dateCompare;
+            return a.starttime.localeCompare(b.starttime);
+        });
+        
+        for (const exam of sortedExams) {
+            const availableObservers = this.getAvailableObserversForExam(
+                exam, 
+                data.observers, 
+                observerUsage,
+                data.conflicts
+            );
+            
+            if (availableObservers.length >= 2) {
+                // Sort by workload (ascending) for consistent selection
+                const sorted = availableObservers.sort((a, b) => {
+                    const aWorkload = (observerUsage.get(a.observerid) || []).length;
+                    const bWorkload = (observerUsage.get(b.observerid) || []).length;
+                    return aWorkload - bWorkload;
+                });
+                
+                const head = sorted[0];
+                const secretary = sorted[1];
+                
+                chromosome.push({
+                    examId: exam.examid,
+                    headId: head.observerid,
+                    secretaryId: secretary.observerid
+                });
+                
+                // Update usage
+                this.updateObserverUsage(observerUsage, head.observerid, exam);
+                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
+            } else {
+                // No valid assignment
+                chromosome.push({
+                    examId: exam.examid,
+                    headId: null,
+                    secretaryId: null
+                });
+            }
+        }
+        
+        return chromosome;
     }
 
     /**
@@ -199,6 +265,8 @@ class GeneticAssignmentService {
                 // Update usage
                 this.updateObserverUsage(observerUsage, head.observerid, exam);
                 this.updateObserverUsage(observerUsage, secretary.observerid, exam);
+                
+                debugStats.successfulAssignments++;
             } else {
                 // No valid assignment
                 chromosome.push({
@@ -206,6 +274,10 @@ class GeneticAssignmentService {
                     headId: null,
                     secretaryId: null
                 });
+                
+                debugStats.failedAssignments++;
+                const reason = `Only ${availableObservers.length} observers available`;
+                debugStats.failureReasons.set(reason, (debugStats.failureReasons.get(reason) || 0) + 1);
             }
         }
         
@@ -219,30 +291,48 @@ class GeneticAssignmentService {
         const examDate = new Date(exam.examdate);
         const examDay = examDate.toLocaleString('en-US', { weekday: 'long' });
         
-        return observers.filter(observer => {
-            // Check availability type
-            if (observer.availability === 'full-time') {
-                // Full-time observers are always available
-            } else if (observer.availability === 'part-time') {
+        const availableObservers = observers.filter(observer => {
+            // Check availability type - handle case sensitivity and null values
+            const availability = observer.availability ? observer.availability.toLowerCase() : 'full-time';
+            
+            if (availability === 'full-time' || !observer.availability) {
+                // Full-time observers are always available (only check conflicts)
+            } else if (availability === 'part-time') {
                 // Check time slots
                 const slots = observer.time_slots || [];
+                
+                // If no time slots defined, assume not available
+                if (slots.length === 0) {
+                    return false;
+                }
+                
                 const hasMatchingSlot = slots.some(slot => {
-                    const slotDay = slot.day?.toLowerCase();
-                    const examDayLower = examDay.toLowerCase();
-                    if (slotDay !== examDayLower) return false;
+                    if (!slot) return false;
                     
+                    const slotDay = slot.day ? slot.day.toLowerCase() : '';
+                    const examDayLower = examDay.toLowerCase();
+                    
+                    if (slotDay !== examDayLower) {
+                        return false;
+                    }
+                    
+                    // Handle both camelCase and lowercase property names
                     const slotStart = slot.startTime || slot.starttime;
                     const slotEnd = slot.endTime || slot.endtime;
                     
-                    return slotStart <= exam.starttime && slotEnd >= exam.endtime;
+                    if (!slotStart || !slotEnd) return false;
+                    
+                    const timeMatch = slotStart <= exam.starttime && slotEnd >= exam.endtime;
+                    return timeMatch;
                 });
                 
                 if (!hasMatchingSlot) return false;
             } else {
+                // Unknown availability type
                 return false;
             }
             
-            // Check conflicts with current assignments
+            // Check conflicts with current assignments (in-memory tracking)
             const observerExams = currentUsage.get(observer.observerid) || [];
             const hasConflict = observerExams.some(assignedExam => {
                 if (assignedExam.examdate.getTime() !== examDate.getTime()) return false;
@@ -256,13 +346,16 @@ class GeneticAssignmentService {
                 if (conflict.observerid !== observer.observerid) return false;
                 if (new Date(conflict.examdate).getTime() !== examDate.getTime()) return false;
                 
-                const conflictStart = conflict.starttime;
-                const conflictEnd = conflict.endtime;
+                // Handle both camelCase and lowercase property names
+                const conflictStart = conflict.startTime || conflict.starttime;
+                const conflictEnd = conflict.endTime || conflict.endtime;
                 return (exam.starttime < conflictEnd && exam.endtime > conflictStart);
             });
             
             return !existingConflict;
         });
+        
+        return availableObservers;
     }
 
     /**
@@ -295,9 +388,8 @@ class GeneticAssignmentService {
     calculateFitness(chromosome, data) {
         let score = 0;
         const weights = {
-            assigned: 0.4,        // 40% weight for assignment coverage
-            workload: 0.3,        // 30% weight for balanced workload
-            preferences: 0.2,     // 20% weight for preferences (Dr. as head)
+            assigned: 0.5,        // 50% weight for assignment coverage
+            workload: 0.4,        // 40% weight for balanced workload
             efficiency: 0.1       // 10% weight for efficiency
         };
         
@@ -321,19 +413,7 @@ class GeneticAssignmentService {
         const workloadVariance = workloads.reduce((sum, w) => sum + Math.pow(w - avgWorkload, 2), 0) / workloads.length || 0;
         const workloadScore = 1 / (1 + workloadVariance); // Lower variance = higher score
         
-        // 3. Preferences (Dr. as head)
-        let preferenceScore = 0;
-        chromosome.forEach(gene => {
-            if (gene.headId) {
-                const headObserver = data.observers.find(o => o.observerid === gene.headId);
-                if (headObserver?.title?.toLowerCase().includes('dr')) {
-                    preferenceScore += 1;
-                }
-            }
-        });
-        preferenceScore = assignedCount > 0 ? preferenceScore / assignedCount : 0;
-        
-        // 4. Efficiency (minimize observer switching between consecutive exams)
+        // 3. Efficiency (minimize observer switching between consecutive exams)
         let efficiencyScore = 1;
         for (let i = 1; i < chromosome.length; i++) {
             const prev = chromosome[i - 1];
@@ -355,7 +435,6 @@ class GeneticAssignmentService {
         // Calculate weighted fitness
         score = weights.assigned * assignmentScore +
                 weights.workload * workloadScore +
-                weights.preferences * preferenceScore +
                 weights.efficiency * efficiencyScore;
         
         return score;
@@ -371,7 +450,8 @@ class GeneticAssignmentService {
         const eliteCount = Math.floor(this.populationSize * this.elitismRate);
         const sortedPop = [...population].sort((a, b) => b.fitness - a.fitness);
         for (let i = 0; i < eliteCount; i++) {
-            newPopulation.push(sortedPop[i]);
+            // Preserve all properties including isGreedy flag
+            newPopulation.push({ ...sortedPop[i] });
         }
         
         // Generate rest of population
@@ -385,8 +465,8 @@ class GeneticAssignmentService {
             if (Math.random() < this.crossoverRate) {
                 [offspring1, offspring2] = this.crossover(parent1, parent2, data);
             } else {
-                offspring1 = { ...parent1 };
-                offspring2 = { ...parent2 };
+                offspring1 = { ...parent1, isGreedy: false };
+                offspring2 = { ...parent2, isGreedy: false };
             }
             
             // Mutation
@@ -396,6 +476,10 @@ class GeneticAssignmentService {
             if (Math.random() < this.mutationRate) {
                 offspring2 = this.mutate(offspring2, data);
             }
+            
+            // New offspring are not greedy
+            offspring1.isGreedy = false;
+            offspring2.isGreedy = false;
             
             newPopulation.push(offspring1);
             if (newPopulation.length < this.populationSize) {
@@ -708,7 +792,8 @@ class GeneticAssignmentService {
                 failedAssignments: results.failed.length,
                 finalFitness: results.performance.finalFitness,
                 convergenceData: this.performanceMetrics.generations,
-                executionTimeMs: Date.now() - this.performanceMetrics.startTime,
+                totalTimeMs: Date.now() - this.performanceMetrics.startTime,
+                examsPerSecond: (data.exams.length / ((Date.now() - this.performanceMetrics.startTime) / 1000)).toFixed(2),
                 results
             };
             
@@ -722,7 +807,8 @@ class GeneticAssignmentService {
                 examCount: report.examCount,
                 successRate: ((results.successful.length / data.exams.length) * 100).toFixed(1),
                 fitness: results.performance.finalFitness.toFixed(3),
-                executionTimeMs: report.executionTimeMs
+                totalTimeMs: report.totalTimeMs,
+                examsPerSecond: report.examsPerSecond
             }) + '\n';
             
             await fs.appendFile(summaryFile, summaryLine);

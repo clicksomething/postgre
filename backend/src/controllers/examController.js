@@ -593,7 +593,7 @@ const uploadExamSchedule = async (req, res) => {
                     academicYear,
                     semester,
                     examType,
-                    req.file.originalname,
+                    Buffer.from(req.file.originalname, 'latin1').toString('utf8'),
                     1, // TODO: Replace with actual user ID
                     'processing'
                 ]

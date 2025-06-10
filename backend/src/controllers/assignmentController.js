@@ -343,7 +343,8 @@ const assignmentController = {
                 generations = 100,
                 mutationRate = 0.1,
                 crossoverRate = 0.7,
-                elitismRate = 0.1
+                elitismRate = 0.1,
+                useDeterministicInit = true  // Default to true for better results
             } = req.body;
 
             // Validate parameters
@@ -378,7 +379,8 @@ const assignmentController = {
                 generations,
                 mutationRate,
                 crossoverRate,
-                elitismRate
+                elitismRate,
+                useDeterministicInit
             });
 
             // Run genetic algorithm

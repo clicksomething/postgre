@@ -866,24 +866,37 @@ const uploadObservers = async (req, res) => {
                 console.log('Scientific Rank:', mappedScientificRank);
                 console.log('Availability:', mappedAvailability);
 
-                // Generate unique email
-                const sanitizedName = mappedRow.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const uniquePart = crypto.randomBytes(3).toString('hex');
-                const email = `${sanitizedName}.${uniquePart}@observers.local`;
-
                 // Generate default password
                 const defaultPassword = crypto.randomBytes(8).toString('hex');
                 const hashedPassword = await bcrypt.hash(defaultPassword, 10);
                 
-                // Check for existing user
-                const existingUser = await client.query(
-                    `SELECT "id" FROM "userinfo" WHERE "name" = $1 AND "email" = $2`, 
-                    [mappedRow.name.trim(), email]
-                );
-
-                if (existingUser.rows.length > 0) {
-                    throw new Error(`Observer with name ${mappedRow.name} and email ${email} already exists.`);
+                // Check for existing observer by name (and optionally father's name for better uniqueness)
+                let existingObserver;
+                if (mappedRow.fatherName) {
+                    existingObserver = await client.query(
+                        `SELECT o."observerid", o."name", o."fathername" 
+                         FROM "observer" o 
+                         WHERE LOWER(o."name") = LOWER($1) AND LOWER(o."fathername") = LOWER($2)`, 
+                        [mappedRow.name.trim(), mappedRow.fatherName.trim()]
+                    );
+                } else {
+                    existingObserver = await client.query(
+                        `SELECT o."observerid", o."name" 
+                         FROM "observer" o 
+                         WHERE LOWER(o."name") = LOWER($1)`, 
+                        [mappedRow.name.trim()]
+                    );
                 }
+
+                if (existingObserver.rows.length > 0) {
+                    const existing = existingObserver.rows[0];
+                    throw new Error(`Observer "${mappedRow.name}" already exists (ID: ${existing.observerid})`);
+                }
+
+                // Generate unique email
+                const sanitizedName = mappedRow.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const uniquePart = crypto.randomBytes(3).toString('hex');
+                const email = `${sanitizedName}.${uniquePart}@observers.local`;
 
                 // Insert user info
                 const userInfoResult = await client.query(
