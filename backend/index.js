@@ -37,6 +37,8 @@ const logger = {
 app.use((req, res, next) => {
     const logEntry = `${req.method} ${req.url} - ${req.get('user-agent') || 'Unknown Agent'}`;
     console.log(logEntry);
+    console.log('Request Headers:', req.headers);
+    console.log('Request Body:', req.body);
     next();
 });
 
@@ -46,6 +48,20 @@ app.use('/api/users', userRoutes);
 app.use('/api/timeslots', timeSlotRouter);
 app.use('/api/exams', examRoutes);
 app.use('/api/assignments', assignmentRoutes);
+
+// Log all registered routes
+function logRoutes(app) {
+    console.log('--- REGISTERED ROUTES ---');
+    app._router.stack.forEach(function(r){
+        if (r.route && r.route.path){
+            console.log(`${Object.keys(r.route.methods).join(',')} ${r.route.path}`);
+        }
+    });
+    console.log('--- END REGISTERED ROUTES ---');
+}
+
+// Call this after setting up routes
+logRoutes(app);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -61,18 +77,53 @@ app.use((err, req, res, next) => {
 // Initialize database and insert dummy data
 async function initializeDatabase() {
     try {
-        await initDB();
-        console.log('Database tables created successfully!');
-        await insertDummyData();
+        // Check if tables exist
+        const tablesCheckQuery = `
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_type = 'BASE TABLE';
+        `;
+        const tablesResult = await client.query(tablesCheckQuery);
+
+        // If no tables exist, create them
+        if (tablesResult.rows.length === 0) {
+            console.log('No tables found. Initializing database...');
+            await initDB();
+            console.log('Database tables created successfully!');
+        }
+
+        // Check if tables are empty
+        const emptyTablesCheck = `
+            SELECT schemaname, relname 
+            FROM pg_stat_user_tables 
+            WHERE n_live_tup = 0;
+        `;
+        const emptyTablesResult = await client.query(emptyTablesCheck);
+
+        // If tables are empty, insert dummy data
+        if (emptyTablesResult.rows.length > 0) {
+            console.log('Some tables are empty. Inserting dummy data...');
+            await insertDummyData();
+            console.log('Dummy data inserted successfully!');
+        }
     } catch (err) {
-        console.error(`Error during initialization: ${err}`);
+        console.error(`Error during database initialization: ${err}`);
         process.exit(1);
     }
 }
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT}`);
+    
+    // Initialize database before fully starting the server
+    try {
+        await initializeDatabase();
+    } catch (err) {
+        console.error('Failed to initialize database:', err);
+        process.exit(1);
+    }
 });
 
 // Graceful shutdown

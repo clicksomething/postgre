@@ -72,13 +72,31 @@ const login = async (req, res) => {
     }
 
     try {
+        // Log the login attempt
+        console.log('Login Attempt:', {
+            email,
+            passwordLength: password.length
+        });
+
         const result = await client.query(
-            `SELECT ui.ID, ui.Password, u.UserID, u.RoleID
+            `SELECT ui.ID, ui.Password, ui.Email, u.UserID, u.RoleID, r.RoleName
             FROM UserInfo ui
             JOIN AppUser u ON ui.ID = u.U_ID
+            JOIN Roles r ON u.RoleID = r.RoleID
             WHERE ui.Email = $1`,
             [email]
         );
+
+        console.log('Database Query Results:', {
+            rowCount: result.rows.length,
+            userDetails: result.rows.map(row => ({
+                id: row.id,
+                email: row.email,
+                passwordHash: row.password ? row.password.substring(0, 10) + '...' : 'NO HASH',
+                roleId: row.roleid,
+                roleName: row.rolename
+            }))
+        });
 
         if (result.rows.length === 0) {
             return res.status(401).json({ message: 'Invalid email or password' });
@@ -95,10 +113,53 @@ const login = async (req, res) => {
             return res.status(500).json({ message: 'User password not found' });
         }
 
-        // Compare the provided password with the hashed password
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+        // Detailed password comparison logging
+        console.log('Password Comparison:', {
+            inputPassword: password,
+            inputPasswordLength: password.length,
+            storedHashLength: user.password ? user.password.length : 'N/A',
+            storedHashStart: user.password ? user.password.substring(0, 10) : 'N/A'
+        });
+
+        // Detailed bcrypt comparison
+        try {
+            console.log('Bcrypt Debugging:', {
+                bcryptVersion: require('bcrypt').version,
+                nodeVersion: process.version
+            });
+
+            // Manually hash the input password with the same method
+            const manualHash = await bcrypt.hash(password, 10);
+            
+            console.log('Manual Hash Comparison:', {
+                inputPasswordManualHash: manualHash,
+                storedHash: user.password,
+                manualHashLength: manualHash.length,
+                storedHashLength: user.password.length,
+                hashesEqual: manualHash === user.password
+            });
+
+            const passwordCompareStart = Date.now();
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            const passwordCompareTime = Date.now() - passwordCompareStart;
+
+            console.log('Password Comparison Result:', {
+                isValid: isPasswordValid,
+                comparisonTime: `${passwordCompareTime}ms`
+            });
+
+            if (!isPasswordValid) {
+                // Try alternative comparison methods
+                console.log('Alternative Comparison Attempts:', {
+                    directCompare: password === user.password,
+                    trimmedCompare: password.trim() === user.password.trim()
+                });
+
+                return res.status(401).json({ message: 'Invalid email or password' });
+            }
+        } catch (compareError) {
+            console.error('Bcrypt Compare Error:', compareError);
+            return res.status(500).json({ message: 'Internal authentication error', error: compareError.message });
         }
 
         // Generate a JWT token

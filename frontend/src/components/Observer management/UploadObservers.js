@@ -73,26 +73,51 @@ const UploadObservers = ({ onUploadSuccess }) => {
             const token = localStorage.getItem('authToken');
             const userRole = localStorage.getItem('userRole');
 
+            console.log('Auth Token:', token);
+            console.log('User Role:', userRole);
+
             if (!token || userRole !== 'admin') {
                 throw new Error('You must be logged in as an admin to upload files');
             }
 
-            const response = await axios.post('http://localhost:3000/api/observers/upload', data, {
+            const config = {
+                url: 'http://localhost:3000/api/users/observers/upload',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     'Authorization': `Bearer ${token}`
                 },
+                data: data,
                 onUploadProgress: (progressEvent) => {
                     const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
                     setUploadProgress(progress);
                 }
-            });
+            };
+
+            console.log('Axios Request Config:', config);
+
+            const response = await axios(config);
 
             onUploadSuccess(response.data);
             setFile(null);
             setUploadProgress(0);
         } catch (err) {
-            console.error('Upload error:', err);
+            console.error('Full Upload Error:', err);
+            console.error('Error Response:', err.response);
+            
+            if (err.response) {
+                // The request was made and the server responded with a status code
+                console.error('Error Data:', err.response.data);
+                console.error('Error Status:', err.response.status);
+                console.error('Error Headers:', err.response.headers);
+            } else if (err.request) {
+                // The request was made but no response was received
+                console.error('No response received:', err.request);
+            } else {
+                // Something happened in setting up the request
+                console.error('Error setting up request:', err.message);
+            }
+
             if (!localStorage.getItem('authToken')) {
                 setError('Please log in to upload files');
             } else if (localStorage.getItem('userRole') !== 'admin') {

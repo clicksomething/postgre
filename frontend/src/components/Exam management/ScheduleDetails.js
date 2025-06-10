@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FaArrowLeft, FaCalendarAlt, FaClock, FaMapMarkerAlt, FaUserTie, FaEdit, FaTrash, FaSearch, FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import axios from 'axios';
 import EditExamModal from './Modals/EditExamModal';
 import DeleteExamModal from './Modals/DeleteExamModal';
 import './ScheduleDetails.scss';
 import { useParams } from 'react-router-dom';
+import { 
+    FaArrowLeft, 
+    FaEdit, 
+    FaTrash, 
+    FaSearch, 
+    FaSort, 
+    FaSortUp, 
+    FaSortDown 
+} from 'react-icons/fa';
 
 const ScheduleDetails = () => {
     const { id: uploadId } = useParams(); // Get the uploadId from the URL params

@@ -33,8 +33,16 @@ const authenticateToken = (req, res, next) => {
 };
 
 const authorizeAdmin = async (req, res, next) => {
-    if (req.user.roleId !== await getAdminRoleId()) {
-        return res.status(403).json({ message: 'Access denied. Admin only.' });
+    const adminRole = await getAdminRoleId();
+    console.log('Admin Role ID:', adminRole);
+    console.log('User Role ID:', req.user.roleId);
+    
+    if (req.user.roleId !== adminRole) {
+        return res.status(403).json({ 
+            message: 'Access denied. Admin only.', 
+            userRoleId: req.user.roleId, 
+            requiredRoleId: adminRole 
+        });
     }
     next();
 };

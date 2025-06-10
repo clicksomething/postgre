@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userObserverController = require('../controllers/userObserverController');
-const { authenticateToken } = require('../middleware/authMiddleware');
+const { authenticateToken, authorizeAdmin } = require('../middleware/authMiddleware');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
@@ -31,16 +31,32 @@ const {
     uploadObservers
 } = require('../controllers/userObserverController');
 
-// CORRECT
-const { authenticateToken, authorizeAdmin } = require('../middleware/authMiddleware.js');
-
-// Add the new route for bulk uploading observers
-router.post(
-    '/observers/upload',
-    authenticateToken, // Use your existing function for checking the token
-    authorizeAdmin,    // Use your existing function for checking the admin role
-    upload.single('file'),
-    uploadObservers
+// Modify the upload route to match frontend expectations
+router.post('/observers/upload', 
+    (req, res, next) => {
+        console.log('--- UPLOAD ROUTE MIDDLEWARE ---');
+        console.log('Request Headers:', req.headers);
+        console.log('Request Body:', req.body);
+        next();
+    },
+    authenticateToken, 
+    (req, res, next) => {
+        console.log('--- AFTER AUTH TOKEN ---');
+        console.log('Authenticated User:', req.user);
+        next();
+    },
+    authorizeAdmin,
+    (req, res, next) => {
+        console.log('--- AFTER AUTHORIZE ADMIN ---');
+        next();
+    },
+    userObserverController.upload.single('file'),
+    (req, res, next) => {
+        console.log('--- AFTER MULTER UPLOAD ---');
+        console.log('Uploaded File:', req.file);
+        next();
+    },
+    userObserverController.uploadObservers
 );
 
 module.exports = router;

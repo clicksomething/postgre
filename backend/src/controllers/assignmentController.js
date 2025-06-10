@@ -1,6 +1,8 @@
 const AssignmentService = require('../services/assignmentService');
 const { client } = require('../../database/db');
 const jwt = require('jsonwebtoken');
+const fs = require('fs').promises;
+const path = require('path');
 
 const assignmentController = {
     // Get all exams with their assignment status
@@ -72,10 +74,6 @@ const assignmentController = {
 
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            console.log(`[ASSIGNMENT CONTROLLER] Authentication Details:`, {
-                roleId: decoded.roleId,
-                userId: decoded.userId
-            });
 
             if (decoded.roleId !== 2) { // Admin role ID
                 console.warn(`[ASSIGNMENT CONTROLLER] Unauthorized access attempt`, {
@@ -86,11 +84,9 @@ const assignmentController = {
             }
 
             const { examId } = req.params;
-            console.log(`[ASSIGNMENT CONTROLLER] Attempting to assign observers for Exam ID: ${examId}`);
 
             try {
                 const result = await AssignmentService.assignObserversToExam(examId);
-                console.log(`[ASSIGNMENT CONTROLLER] Assignment Result:`, JSON.stringify(result));
                 res.json(result);
             } catch (assignmentError) {
                 console.error(`[ASSIGNMENT CONTROLLER] Assignment Error Details:`, {
@@ -203,7 +199,158 @@ const assignmentController = {
             console.error('Error fetching assignment statistics:', error);
             res.status(500).json({ message: 'Failed to fetch assignment statistics' });
         }
+    },
+
+    // Get performance history from files
+    getPerformanceHistory: async (req, res) => {
+        try {
+            const { limit = 10, offset = 0 } = req.query;
+            const reportsDir = path.join(__dirname, '../../performance-reports');
+            
+            // Read all performance report files
+            let files = [];
+            try {
+                files = await fs.readdir(reportsDir);
+                files = files.filter(f => f.startsWith('assignment-performance-') && f.endsWith('.json'));
+            } catch (err) {
+                // Directory might not exist yet
+                return res.json({ performances: [], total: 0 });
+            }
+            
+            // Sort files by timestamp (newest first)
+            files.sort().reverse();
+            
+            // Apply pagination
+            const paginatedFiles = files.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+            
+            // Read the performance reports
+            const performances = [];
+            for (const file of paginatedFiles) {
+                try {
+                    const content = await fs.readFile(path.join(reportsDir, file), 'utf8');
+                    const report = JSON.parse(content);
+                    performances.push({
+                        filename: file,
+                        ...report
+                    });
+                } catch (err) {
+                    console.error(`Error reading performance file ${file}:`, err);
+                }
+            }
+            
+            res.json({
+                performances,
+                total: files.length
+            });
+        } catch (error) {
+            console.error('Error fetching performance history:', error);
+            res.status(500).json({ message: 'Failed to fetch performance history' });
+        }
+    },
+
+    // Get performance statistics summary from summary file
+    getPerformanceStats: async (req, res) => {
+        try {
+            const { days = 7 } = req.query;
+            const reportsDir = path.join(__dirname, '../../performance-reports');
+            const summaryFile = path.join(reportsDir, 'performance-summary.jsonl');
+            
+            let summaryLines = [];
+            try {
+                const content = await fs.readFile(summaryFile, 'utf8');
+                summaryLines = content.trim().split('\n').filter(line => line);
+            } catch (err) {
+                // File might not exist yet
+                return res.json({
+                    dailyStats: [],
+                    overallStats: {
+                        totalOperations: 0,
+                        avgTimeMs: 0,
+                        avgExamsPerSecond: 0,
+                        bestTimeMs: null,
+                        worstTimeMs: null
+                    },
+                    period: `${days} days`
+                });
+            }
+            
+            // Parse all summary lines
+            const allSummaries = summaryLines.map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch (err) {
+                    return null;
+                }
+            }).filter(s => s !== null);
+            
+            // Filter by date range
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - parseInt(days));
+            
+            const recentSummaries = allSummaries.filter(s => 
+                new Date(s.timestamp) >= cutoffDate
+            );
+            
+            // Calculate daily statistics
+            const dailyStats = {};
+            recentSummaries.forEach(summary => {
+                const date = new Date(summary.timestamp).toISOString().split('T')[0];
+                if (!dailyStats[date]) {
+                    dailyStats[date] = {
+                        date,
+                        operations: [],
+                        totalExams: 0
+                    };
+                }
+                dailyStats[date].operations.push(summary);
+                dailyStats[date].totalExams += summary.examCount;
+            });
+            
+            // Calculate aggregated daily stats
+            const dailyStatsArray = Object.values(dailyStats).map(day => {
+                const times = day.operations.map(op => parseFloat(op.totalTimeMs));
+                const examsPerSec = day.operations.map(op => parseFloat(op.examsPerSecond));
+                
+                return {
+                    date: day.date,
+                    totalOperations: day.operations.length,
+                    totalExamsProcessed: day.totalExams,
+                    avgDurationMs: (times.reduce((a, b) => a + b, 0) / times.length).toFixed(2),
+                    avgExamsPerSecond: (examsPerSec.reduce((a, b) => a + b, 0) / examsPerSec.length).toFixed(2),
+                    maxExamsPerSecond: Math.max(...examsPerSec).toFixed(2),
+                    bestTimeMs: Math.min(...times),
+                    worstTimeMs: Math.max(...times)
+                };
+            }).sort((a, b) => b.date.localeCompare(a.date));
+            
+            // Calculate overall statistics
+            const allTimes = recentSummaries.map(s => parseFloat(s.totalTimeMs));
+            const allExamsPerSec = recentSummaries.map(s => parseFloat(s.examsPerSecond));
+            
+            const overallStats = {
+                totalOperations: recentSummaries.length,
+                totalExamsProcessed: recentSummaries.reduce((sum, s) => sum + s.examCount, 0),
+                avgDurationMs: allTimes.length > 0 ? 
+                    (allTimes.reduce((a, b) => a + b, 0) / allTimes.length).toFixed(2) : 0,
+                avgExamsPerSecond: allExamsPerSec.length > 0 ?
+                    (allExamsPerSec.reduce((a, b) => a + b, 0) / allExamsPerSec.length).toFixed(2) : 0,
+                maxExamsPerSecond: allExamsPerSec.length > 0 ? 
+                    Math.max(...allExamsPerSec).toFixed(2) : 0,
+                bestTimeMs: allTimes.length > 0 ? Math.min(...allTimes) : null,
+                worstTimeMs: allTimes.length > 0 ? Math.max(...allTimes) : null
+            };
+            
+            res.json({
+                dailyStats: dailyStatsArray,
+                overallStats,
+                period: `${days} days`
+            });
+        } catch (error) {
+            console.error('Error fetching performance statistics:', error);
+            res.status(500).json({ message: 'Failed to fetch performance statistics' });
+        }
     }
+
 };
 
 module.exports = assignmentController; 

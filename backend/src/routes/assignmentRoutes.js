@@ -15,6 +15,8 @@ router.post('/exams/:examId/assign', assignmentController.assignObservers);
 router.post('/exams/:examId/observers/:observerId/unavailable', assignmentController.handleObserverUnavailability);
 router.get('/exams/:examId/available-observers', assignmentController.getAvailableObservers);
 router.get('/statistics', assignmentController.getAssignmentStats);
+router.get('/performance/history', assignmentController.getPerformanceHistory);
+router.get('/performance/stats', assignmentController.getPerformanceStats);
 
 // Handle unavailability with file upload support
 router.post(

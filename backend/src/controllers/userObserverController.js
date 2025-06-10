@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const crypto = require('crypto');
+const { parseTimeSlot, validateAndFormatTime } = require('../utils/timeSlotParser');
 
 const fileFilter = (req, file, cb) => {
   // Mimetypes for Excel files (.xlsx, .xls)
@@ -240,7 +241,7 @@ const getObservers = async (req, res) => {
       FROM Observer o
       JOIN AppUser au ON o.U_ID = au.UserID
       JOIN Roles r ON au.RoleID = r.RoleID
-      LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
+      LEFT JOIN timeslot ts ON o.ObserverID = ts.ObserverID
       ORDER BY o.ObserverID, ts.Day
     `);
 
@@ -336,7 +337,7 @@ const getObserverById = async (req, res) => {
       FROM Observer o
       JOIN AppUser au ON o.U_ID = au.UserID
       JOIN Roles r ON au.RoleID = r.RoleID
-      LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
+      LEFT JOIN timeslot ts ON o.ObserverID = ts.ObserverID
       WHERE o.ObserverID = $1
       ORDER BY ts.Day
     `, [id]);
@@ -594,226 +595,445 @@ const deleteObserver = async (req, res) => {
     // Start a transaction
     await client.query('BEGIN');
 
-    // 1. Remove the observer from ExamAssignment
-    await client.query(`
-      DELETE FROM ExamAssignment 
-      WHERE ObserverID = $1
+    // 1. Find the associated AppUser and UserInfo IDs
+    const userInfoResult = await client.query(`
+      SELECT o.u_id as user_info_id, o.u_id as app_user_id
+      FROM observer o
+      WHERE o.observerid = $1
     `, [id]);
 
-    // 2. Update ExamSchedule to remove references to this observer
-    await client.query(`
-      UPDATE ExamSchedule 
-      SET ExamHead = NULL, 
-          ExamSecretary = NULL, 
-          Status = 'unassigned'
-      WHERE ExamHead = $1 OR ExamSecretary = $1
-    `, [id]);
-
-    // 3. Delete the observer
-    const result = await client.query(`
-      DELETE FROM Observer WHERE ObserverID = $1 RETURNING ObserverID
-    `, [id]);
-
-    // Check if observer was actually deleted
-    if (result.rowCount === 0) {
+    if (userInfoResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Observer not found' });
     }
 
+    const { user_info_id, app_user_id } = userInfoResult.rows[0];
+
+    // 2. Remove the observer from ExamAssignment
+    await client.query(`
+      DELETE FROM examassignment 
+      WHERE observerid = $1
+    `, [id]);
+
+    // 3. Update ExamSchedule to remove references to this observer
+    await client.query(`
+      UPDATE examschedule 
+      SET examhead = NULL, 
+          examsecretary = NULL, 
+          status = 'unassigned'
+      WHERE examhead = $1 OR examsecretary = $1
+    `, [id]);
+
+    // 4. Delete associated TimeSlots
+    await client.query(`
+      DELETE FROM timeslot
+      WHERE observerid = $1
+    `, [id]);
+
+    // 5. Delete associated Preferences
+    await client.query(`
+      DELETE FROM preferences
+      WHERE observerid = $1
+    `, [id]);
+
+    // 6. Delete the observer
+    await client.query(`
+      DELETE FROM observer WHERE observerid = $1
+    `, [id]);
+
+    // 7. Delete the AppUser 
+    await client.query(`
+      DELETE FROM appuser 
+      WHERE userid = $1
+    `, [user_info_id]);
+    
+    // 8. Delete the UserInfo
+    await client.query(`
+      DELETE FROM userinfo 
+      WHERE id = $1
+    `, [user_info_id]);
+
     // Commit the transaction
     await client.query('COMMIT');
 
-    res.status(200).json({ message: 'Observer deleted successfully' });
+    res.status(200).json({ 
+      message: 'Observer and all associated records deleted successfully',
+      details: {
+        observerId: id,
+        userInfoId: user_info_id,
+        appUserId: app_user_id
+      }
+    });
   } catch (err) {
     // Rollback the transaction in case of error
     await client.query('ROLLBACK');
     console.error('Error deleting observer:', err);
     res.status(500).json({ 
       message: 'Error deleting observer', 
-      error: err.message 
+      error: err.message,
+      details: err
     });
   }
 };
 
 const uploadObservers = async (req, res) => {
-  if (!req.file) {
-      return res.status(400).json({ message: "No Excel file uploaded." });
-  }
+    console.log('--- UPLOAD OBSERVERS START ---');
+    console.log('Request User:', req.user);
+    console.log('Request Headers:', req.headers);
+    console.log('Request File:', req.file);
 
-  const summary = {
-      observersCreated: 0,
-      timeSlotsCreated: 0,
-      errors: [],
-  };
+    if (!req.file) {
+        console.log('No file uploaded');
+        return res.status(400).json({ message: "No Excel file uploaded." });
+    }
 
-  // --- UPDATED: Header mapping now excludes email and phone number ---
-  const headerMapping = {
-      'الاسم': 'name',
-      'الاسم ': 'name',  // Added mapping for name with trailing space
-      'اللقب': 'title',
-      'المرتبة العلمية': 'scientificRank',
-      'اسم الأب': 'fatherName',
-      'التفرغ': 'availability',
-      'السبت': 'saturday',
-      'الاحد': 'sunday',
-      'الاثنين': 'monday',
-      'الثلاثاء': 'tuesday',
-      'الاربعاء': 'wednesday',
-      'الخميس': 'thursday',
-  };
+    const summary = {
+        observersCreated: 0,
+        timeSlotsCreated: 0,
+        errors: [],
+        parseErrors: [],
+    };
 
-  // Add availability mapping
-  const availabilityMapping = {
-      'جزئي': 'part-time',
-      'كامل': 'full-time',
-      'part-time': 'part-time',
-      'full-time': 'full-time'
-  };
-  
-  const dayColumns = {
-      saturday: 'Saturday',
-      sunday: 'Sunday',
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-  };
+    try {
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        if (!sheetName) throw new Error("The uploaded Excel file contains no sheets.");
+        
+        const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-  try {
-      const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) throw new Error("The uploaded Excel file contains no sheets.");
-      
-      const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        console.log("--- FULL EXCEL DATA ---");
+        console.log(JSON.stringify(results, null, 2));
+        console.log("-----------------------");
 
-      if (results.length > 0) {
-          console.log("--- DEBUG: Headers read from your Excel file ---");
-          console.log(Object.keys(results[0]));
-          console.log("--- DEBUG: First row of data ---");
-          console.log(results[0]);
-          console.log("-------------------------------------------------");
-      }
+        const roleResult = await client.query(`SELECT "roleid" FROM "roles" WHERE "rolename" = 'observer'`);
+        const observerRoleId = roleResult.rows[0]?.roleid;
+        if (!observerRoleId) throw new Error("The 'observer' role was not found.");
 
-      const roleResult = await client.query(`SELECT "roleid" FROM "roles" WHERE "rolename" = 'observer'`);
-      const observerRoleId = roleResult.rows[0]?.roleid;
-      if (!observerRoleId) throw new Error("The 'observer' role was not found.");
+        // Comprehensive mapping for titles and scientific ranks
+        const titleMappings = {
+            // Arabic to English with "ال" prefix
+            'الدكتور': 'Dr.',
+            'الدكتورة': 'Dr.',
 
-      for (const [index, row] of results.entries()) {
-          const rowNum = index + 2;
-          try {
-              await client.query('BEGIN');
-              
-              const mappedRow = Object.keys(row).reduce((acc, key) => {
-                  const trimmedKey = key.trim();
-                  if (headerMapping[trimmedKey]) {
-                      acc[headerMapping[trimmedKey]] = row[key];
-                  }
-                  return acc;
-              }, {});
+            // Without "ال" prefix
+            'دكتور': 'Dr.',
+            'دكتورة': 'Dr.',
 
-              console.log(`--- DEBUG: Processing row ${rowNum} ---`);
-              console.log('Original row:', row);
-              console.log('Mapped row:', mappedRow);
-              console.log('-------------------------------------------------');
+            // Existing English options
+            'Dr.': 'Dr.',
+            'Prof.': 'Prof.',
+            'Assoc. Prof.': 'Assoc. Prof.',
+            'Assist. Prof.': 'Assist. Prof.',
+            'Mr.': 'Mr.',
+            'Mrs.': 'Mrs.',
+            'Ms.': 'Ms.',
+        };
 
-              const { name, title, scientificRank, fatherName, availability } = mappedRow;
+        const scientificRankMappings = {
+            // Arabic to English mappings
+            'مدرس': 'Lecturer',
+            'مدرس مساعد': 'Assistant Lecturer',
+            'أستاذ مساعد': 'Assistant Professor',
+            'أستاذ مشارك': 'Associate Professor',
+            'أستاذ': 'Professor',
+            'محاضر': 'Lecturer',
+            'محاضر مساعد': 'Assistant Lecturer',
+            'إجازة': 'Bachelor Degree Holder',
+            'ماجستير': 'Master Degree Holder',
 
-              if (!name) {
-                  summary.errors.push({ row: rowNum, message: 'Missing required field: Name' });
-                  await client.query('ROLLBACK');
-                  continue;
-              }
+            // Existing English options
+            'Professor': 'Professor',
+            'Associate Professor': 'Associate Professor',
+            'Assistant Professor': 'Assistant Professor',
+            'Lecturer': 'Lecturer',
+            'Teaching Assistant': 'Teaching Assistant',
+            'Research Assistant': 'Research Assistant',
+        };
 
-              // Map availability to English
-              const mappedAvailability = availabilityMapping[availability?.trim()] || 'part-time';
+        // Mapping functions with robust handling
+        const mapTitle = (title) => {
+            if (!title) return '';
+            
+            // Normalize the title: trim, remove extra whitespace, and handle Arabic variations
+            const normalizedTitle = title.trim()
+                .replace(/\s+/g, ' ')  // Replace multiple whitespaces with single space
+                .replace(/^ال\s*/, '');  // Remove leading "ال" and any following whitespace
+            
+            // Try mapping with original title first
+            let mappedTitle = titleMappings[title.trim()] || 
+                              titleMappings[normalizedTitle] || 
+                              normalizedTitle;
+            
+            return mappedTitle;
+        };
 
-              const existingUser = await client.query(`SELECT "id" FROM "userinfo" WHERE "name" = $1`, [name]);
-              if (existingUser.rows.length > 0) {
-                  summary.errors.push({ row: rowNum, name, message: 'An observer with this name already exists.' });
-                  await client.query('ROLLBACK');
-                  continue;
-              }
+        const mapScientificRank = (rank) => {
+            if (!rank) return '';
+            
+            // Normalize the rank: trim, remove extra whitespace, and handle Arabic variations
+            const normalizedRank = rank.trim()
+                .replace(/\s+/g, ' ')  // Replace multiple whitespaces with single space
+                .replace(/^ال\s*/, '');  // Remove leading "ال" and any following whitespace
+            
+            // Try mapping with original rank first
+            let mappedRank = scientificRankMappings[rank.trim()] || 
+                             scientificRankMappings[normalizedRank] || 
+                             normalizedRank;
+            
+            return mappedRank;
+        };
 
-              const sanitizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-              const uniquePart = crypto.randomBytes(3).toString('hex');
-              const email = `${sanitizedName}.${uniquePart}@observers.local`;
+        // Flexible header mapping function
+        const findMatchingHeader = (row, targetKeys) => {
+            const rowKeys = Object.keys(row);
+            for (const targetKey of targetKeys) {
+                const matchingKey = rowKeys.find(key => 
+                    key.trim().replace(/\s+/g, '') === targetKey.trim().replace(/\s+/g, '')
+                );
+                if (matchingKey) return matchingKey;
+            }
+            return null;
+        };
 
-              const defaultPassword = crypto.randomBytes(8).toString('hex');
-              const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-              
-              const userInfoResult = await client.query(
-                  `INSERT INTO "userinfo" ("name", "email", "phonenum", "password") 
-                   VALUES ($1, $2, $3, $4) RETURNING "id"`,
-                  [name, email, null, hashedPassword]
-              );
-              
-              const userInfoId = userInfoResult.rows[0].id;
-              
-              const appUserResult = await client.query(
-                  `INSERT INTO "appuser" ("u_id", "roleid") 
-                   VALUES ($1, $2) RETURNING "userid"`,
-                  [userInfoId, observerRoleId]
-              );
-              
-              const appUserId = appUserResult.rows[0].userid;
-              
-              const observerResult = await client.query(
-                  `INSERT INTO "observer" ("u_id", "email", "password", "name", "phonenum", "title", "scientificrank", "fathername", "availability") 
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "observerid"`,
-                  [appUserId, email, hashedPassword, name, null, title, scientificRank, fatherName, mappedAvailability]
-              );
-              
-              const newObserverId = observerResult.rows[0].observerid;
-              summary.observersCreated++;
+        // Comprehensive header mapping with multiple possible variations
+        const headerMappings = {
+            'name': ['الاسم', 'الاسم '],
+            'title': ['اللقب'],
+            'scientificRank': ['المرتبة العلمية'],
+            'fatherName': ['اسم الأب'],
+            'availability': ['التفرغ']
+        };
 
-              if (mappedAvailability === 'part-time') {
-                  for (const dayKey in dayColumns) {
-                      const timeString = mappedRow[dayKey];
-                      if (timeString && timeString.toString().trim() !== '') {
-                          const timeParts = timeString.toString().split('-').map(p => p.trim());
-                          if (timeParts.length === 2) {
-                              const [startTime, endTime] = timeParts;
-                              const dayName = dayColumns[dayKey];
-                              await client.query(
-                                  `INSERT INTO "timeslot" ("starttime", "endtime", "day", "observerid") 
-                                   VALUES ($1, $2, $3, $4)`,
-                                  [startTime, endTime, dayName, newObserverId]
-                              );
-                              summary.timeSlotsCreated++;
-                          } else {
-                              summary.errors.push({ 
-                                  row: rowNum, 
-                                  message: `Could not parse time for ${dayColumns[dayKey]}: "${timeString}"` 
-                              });
-                          }
-                      }
-                  }
-              }
+        // Day mappings with multiple variations
+        const dayMappings = {
+            'saturday': ['السبت'],
+            'sunday': ['الاحد', 'الأحد'],
+            'monday': ['الاثنين', 'الإثنين'],
+            'tuesday': ['الثلاثاء'],
+            'wednesday': ['الاربعاء', 'الأربعاء'],
+            'thursday': ['الخميس']
+        };
 
-              await client.query('COMMIT');
-          } catch (rowError) {
-              await client.query('ROLLBACK');
-              console.error(`Error processing row ${rowNum}:`, rowError);
-              summary.errors.push({ 
-                  row: rowNum, 
-                  name: mappedRow.name, 
-                  message: `Error processing row: ${rowError.message}` 
-              });
-          }
-      }
-      
-      res.status(201).json({ 
-          message: "Observer Excel upload processed.", 
-          ...summary 
-      });
+        // Validate input before processing
+        if (results.length === 0) {
+            throw new Error("The uploaded Excel file is empty.");
+        }
 
-  } catch (err) {
-      console.error('Fatal error during bulk observer upload:', err);
-      res.status(500).json({ 
-          message: 'Failed to upload observers due to a fatal error.', 
-          error: err.message 
-      });
-  }
+        // Process each row in a way that stops on first error
+        for (const [index, row] of results.entries()) {
+            const rowNum = index + 2; // Excel rows start at 2
+            
+            try {
+                await client.query('BEGIN');
+                
+                console.log(`--- PROCESSING ROW ${rowNum} ---`);
+                console.log('Raw Row Data:', JSON.stringify(row, null, 2));
+
+                // Detailed mapping with extensive logging
+                const mappedRow = {};
+
+                // Manually map each known column
+                for (const [header, targetKeys] of Object.entries(headerMappings)) {
+                    const matchingKey = findMatchingHeader(row, targetKeys);
+                    if (matchingKey) {
+                        mappedRow[header] = row[matchingKey];
+                    }
+                }
+
+                console.log('Mapped Row:', JSON.stringify(mappedRow, null, 2));
+
+                // Validate required fields
+                if (!mappedRow.name) {
+                    throw new Error('Missing required field: Name');
+                }
+
+                // Map titles and scientific ranks
+                const mappedTitle = mapTitle(mappedRow.title || '');
+                const mappedScientificRank = mapScientificRank(mappedRow.scientificRank || '');
+
+                // Availability mapping with more comprehensive options
+                const availabilityMapping = {
+                    'جزئي': 'part-time',
+                    'كامل': 'full-time',
+                    'محاضر': 'part-time',  // Assuming 'محاضر' means part-time
+                    'part-time': 'part-time',
+                    'full-time': 'full-time'
+                };
+                const mappedAvailability = availabilityMapping[mappedRow.availability?.trim()] || 'part-time';
+
+                console.log('Mapped Details:');
+                console.log('Title:', mappedTitle);
+                console.log('Scientific Rank:', mappedScientificRank);
+                console.log('Availability:', mappedAvailability);
+
+                // Generate unique email
+                const sanitizedName = mappedRow.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const uniquePart = crypto.randomBytes(3).toString('hex');
+                const email = `${sanitizedName}.${uniquePart}@observers.local`;
+
+                // Generate default password
+                const defaultPassword = crypto.randomBytes(8).toString('hex');
+                const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+                
+                // Check for existing user
+                const existingUser = await client.query(
+                    `SELECT "id" FROM "userinfo" WHERE "name" = $1 AND "email" = $2`, 
+                    [mappedRow.name.trim(), email]
+                );
+
+                if (existingUser.rows.length > 0) {
+                    throw new Error(`Observer with name ${mappedRow.name} and email ${email} already exists.`);
+                }
+
+                // Insert user info
+                const userInfoResult = await client.query(
+                    `INSERT INTO "userinfo" ("name", "email", "phonenum", "password") 
+                     VALUES ($1, $2, $3, $4) RETURNING "id"`,
+                    [mappedRow.name, email, null, hashedPassword]
+                );
+                
+                const userInfoId = userInfoResult.rows[0].id;
+                
+                // Insert app user
+                const appUserResult = await client.query(
+                    `INSERT INTO "appuser" ("u_id", "roleid") 
+                     VALUES ($1, $2) RETURNING "userid"`,
+                    [userInfoId, observerRoleId]
+                );
+                
+                const appUserId = appUserResult.rows[0].userid;
+                
+                // Insert observer
+                const observerResult = await client.query(
+                    `INSERT INTO "observer" ("u_id", "email", "password", "name", "phonenum", "title", "scientificrank", "fathername", "availability") 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "observerid"`,
+                    [
+                        appUserId, 
+                        email, 
+                        hashedPassword, 
+                        mappedRow.name, 
+                        null, 
+                        mappedTitle, 
+                        mappedScientificRank, 
+                        mappedRow.fatherName || '', 
+                        mappedAvailability
+                    ]
+                );
+                
+                const newObserverId = observerResult.rows[0].observerid;
+                
+                // Process time slots
+                for (const [englishDay, arabicDays] of Object.entries(dayMappings)) {
+                    // Find the matching Arabic day key in the row
+                    const matchingDayKey = arabicDays.find(arabicDay => 
+                        row.hasOwnProperty(arabicDay)
+                    );
+
+                    if (matchingDayKey) {
+                        const dayValue = row[matchingDayKey];
+                        
+                        console.log('Time Slot Debug:', {
+                            englishDay,
+                            arabicDays,
+                            matchingDayKey,
+                            dayValue,
+                            rowKeys: Object.keys(row)
+                        });
+
+                        // Normalize dayValue
+                        const normalizedDayValue = typeof dayValue === 'string' ? dayValue.trim() : dayValue;
+
+                        if (normalizedDayValue === '√') {
+                            // Mark full day availability
+                            // Capitalize first letter of day name
+                            const capitalizedDay = englishDay.charAt(0).toUpperCase() + englishDay.slice(1);
+                            await client.query(
+                                `INSERT INTO timeslot (observerid, day, starttime, endtime) 
+                                 VALUES ($1, $2, $3, $4)`,
+                                [newObserverId, capitalizedDay, '08:00', '16:30']
+                            );
+                            summary.timeSlotsCreated++;
+                            console.log(`Inserted full day time slot for ${englishDay}`);
+                        } else if (typeof normalizedDayValue === 'string' && 
+                                   (normalizedDayValue.includes('-') || 
+                                    normalizedDayValue.includes('من الساعة'))) {
+                            try {
+                                // Parse the time slot using the new utility
+                                const parsedTimeSlot = parseTimeSlot(normalizedDayValue);
+                                
+                                // Validate and format start and end times
+                                const startTime = validateAndFormatTime(parsedTimeSlot.startTime);
+                                const endTime = validateAndFormatTime(parsedTimeSlot.endTime);
+
+                                // Insert the time slot
+                                // Capitalize first letter of day name
+                                const capitalizedDay = englishDay.charAt(0).toUpperCase() + englishDay.slice(1);
+                                await client.query(
+                                    `INSERT INTO timeslot (observerid, day, starttime, endtime) 
+                                     VALUES ($1, $2, $3, $4)`,
+                                    [newObserverId, capitalizedDay, startTime, endTime]
+                                );
+                                summary.timeSlotsCreated++;
+                                console.log('Parsed and Inserted Time Slot:', {
+                                    observerId: newObserverId,
+                                    day: englishDay,
+                                    startTime,
+                                    endTime
+                                });
+                            } catch (parseError) {
+                                console.error(`Error parsing time slot for ${englishDay}:`, parseError);
+                                summary.parseErrors.push({
+                                    day: englishDay,
+                                    value: normalizedDayValue,
+                                    error: parseError.message
+                                });
+                            }
+                        }
+                    }
+                }
+
+                await client.query('COMMIT');
+                summary.observersCreated++;
+                console.log(`Successfully created observer: ${mappedRow.name}`);
+            } catch (rowError) {
+                // Rollback the transaction
+                await client.query('ROLLBACK');
+                
+                // Log the detailed error
+                console.error(`Error processing row ${rowNum}:`, rowError);
+                
+                // Add the error to the summary
+                summary.errors.push({ 
+                    row: rowNum, 
+                    message: rowError.message 
+                });
+
+                // Immediately throw to stop the entire upload process
+                throw new Error(`Upload failed at row ${rowNum}: ${rowError.message}`);
+            }
+        }
+
+        console.log('--- UPLOAD SUMMARY ---');
+        console.log('Observers Created:', summary.observersCreated);
+        console.log('Time Slots Created:', summary.timeSlotsCreated);
+        console.log('Errors:', summary.errors);
+        console.log('Parse Errors:', summary.parseErrors);
+
+        // If we get here, the upload was completely successful
+        res.status(200).json({
+            message: 'Observers uploaded successfully',
+            summary: summary
+        });
+    } catch (err) {
+        console.error('Fatal error during bulk observer upload:', err);
+        
+        // Return a detailed error response
+        res.status(500).json({ 
+            message: 'Failed to upload observers',
+            error: err.message,
+            details: summary.errors.concat(summary.parseErrors)
+        });
+    }
 };
 
 

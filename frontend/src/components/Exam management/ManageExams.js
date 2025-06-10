@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { FaUpload, FaList, FaCalendarAlt, FaUserCheck } from 'react-icons/fa';
+import { FaUpload, FaList, FaCalendarAlt, FaUserCheck, FaPlus } from 'react-icons/fa';
 import ViewSchedules from './ViewSchedules';
 import UploadSchedule from './UploadSchedule';
 import ScheduleDetails from './ScheduleDetails';
 import AssignObserversModal from './Modals/AssignObserversModal';
 import AssignmentsView from './AssignmentsView';
 import axios from 'axios';
+import EditExamModal from './Modals/EditExamModal';
+import DeleteExamModal from './Modals/DeleteExamModal';
+import DistributionOptionsModal from './Modals/DistributionOptionsModal';
 import './ManageExams.scss';
 
 const ManageExams = () => {
@@ -14,6 +17,12 @@ const ManageExams = () => {
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [selectedExamForAssignment, setSelectedExamForAssignment] = useState(null);
     const [schedules, setSchedules] = useState([]);
+    const [exams, setExams] = useState([]);
+    const [selectedExam, setSelectedExam] = useState(null);
+    const [isAssignObserversModalOpen, setIsAssignObserversModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDistributionOptionsModalOpen, setIsDistributionOptionsModalOpen] = useState(false);
 
     useEffect(() => {
         fetchSchedules();

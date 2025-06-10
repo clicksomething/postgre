@@ -211,6 +211,15 @@ const ManageUsers = () => {
 
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
+    const handleDeleteUser = async (userId) => {
+        try {
+            await axios.delete(`/api/users/${userId}`);
+            fetchUsers(); // Refresh the list
+        } catch (error) {
+            console.error('Error deleting user:', error);
+        }
+    };
+
     if (loading) {
         return (
             <div className="loading-spinner">

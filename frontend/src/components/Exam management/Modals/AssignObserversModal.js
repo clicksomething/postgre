@@ -1,47 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FaTimes, FaCheck } from 'react-icons/fa';
 import axios from 'axios';
 import './AssignObserversModal.scss';
 
-const AssignObserversModal = ({ exam, onClose, onAssign }) => {
+const AssignObserversModal = ({ 
+    isOpen, 
+    onClose, 
+    examId, 
+    scheduleId 
+}) => {
     const [availableObservers, setAvailableObservers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [selectedObservers, setSelectedObservers] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [assigning, setAssigning] = useState(false);
 
-    useEffect(() => {
-        fetchAvailableObservers();
-    }, []);
-
-    const fetchAvailableObservers = async () => {
+    const fetchAvailableObservers = useCallback(async () => {
+        if (!examId || !scheduleId) return;
+        
         try {
-            const token = localStorage.getItem('authToken');
-            const response = await axios.get(
-                `http://localhost:3000/api/assignments/exams/${exam.id}/available-observers`,
-                {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }
-            );
-            setAvailableObservers(response.data.data);
-            setLoading(false);
-        } catch (err) {
-            setError(err.response?.data?.message || 'Error fetching observers');
+            setLoading(true);
+            const response = await axios.get(`/api/observers/available?examId=${examId}&scheduleId=${scheduleId}`);
+            setAvailableObservers(response.data);
+        } catch (error) {
+            console.error('Error fetching available observers:', error);
+        } finally {
             setLoading(false);
         }
-    };
+    }, [examId, scheduleId]);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchAvailableObservers();
+        }
+    }, [isOpen, fetchAvailableObservers]);
 
     const handleAssign = async () => {
         try {
             setAssigning(true);
             const token = localStorage.getItem('authToken');
             await axios.post(
-                `http://localhost:3000/api/assignments/exams/${exam.id}/assign`,
+                `http://localhost:3000/api/assignments/exams/${examId}/assign`,
                 {},
                 {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }
             );
-            onAssign();
+            onClose();
         } catch (err) {
             setError(err.response?.data?.message || 'Error assigning observers');
         } finally {
@@ -57,9 +62,8 @@ const AssignObserversModal = ({ exam, onClose, onAssign }) => {
                 </button>
                 <h2>Assign Observers</h2>
                 <div className="exam-details">
-                    <p><strong>Exam:</strong> {exam.examName}</p>
-                    <p><strong>Date:</strong> {new Date(exam.examDate).toLocaleDateString()}</p>
-                    <p><strong>Time:</strong> {exam.startTime} - {exam.endTime}</p>
+                    <p><strong>Exam:</strong> {examId}</p>
+                    <p><strong>Date:</strong> {new Date(scheduleId).toLocaleDateString()}</p>
                 </div>
 
                 {loading ? (

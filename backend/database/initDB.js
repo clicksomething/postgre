@@ -270,13 +270,71 @@ async function initDB() {
       Description TEXT
     );
 
+    -- Performance optimization indexes
+    -- Index for ExamSchedule queries
+    CREATE INDEX IF NOT EXISTS idx_examschedule_status_date 
+    ON ExamSchedule(Status, ExamDate) 
+    WHERE Status IN ('unassigned', 'partially_assigned');
+
+    CREATE INDEX IF NOT EXISTS idx_examschedule_date_time 
+    ON ExamSchedule(ExamDate, StartTime, EndTime);
+
+    -- Index for ExamAssignment queries
+    CREATE INDEX IF NOT EXISTS idx_examassignment_examid_status 
+    ON ExamAssignment(ExamID, Status);
+
+    CREATE INDEX IF NOT EXISTS idx_examassignment_observerid_status 
+    ON ExamAssignment(ObserverID, Status);
+
+    -- Composite index for conflict checking
+    CREATE INDEX IF NOT EXISTS idx_examassignment_observer_active 
+    ON ExamAssignment(ObserverID, Status) 
+    WHERE Status = 'active';
+
+    -- Index for TimeSlot queries
+    CREATE INDEX IF NOT EXISTS idx_timeslot_observer_day 
+    ON TimeSlot(ObserverID, day);
+
+    -- Index for Observer availability
+    CREATE INDEX IF NOT EXISTS idx_observer_availability 
+    ON Observer(Availability);
+
+    -- Index for UserInfo email (for login performance)
+    CREATE INDEX IF NOT EXISTS idx_userinfo_email 
+    ON UserInfo(Email);
+
+
 
   `;
 
   try {
     await client.connect();
     await client.query('BEGIN');
-    await client.query(query);
+    
+    console.log('Starting database initialization...');
+    
+    try {
+      await client.query(query);
+      console.log('Database schema creation query executed successfully.');
+    } catch (schemaError) {
+      console.error('Error creating database schema:', schemaError);
+      throw schemaError;
+    }
+
+    // Verify table creation
+    const tablesCheckQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE';
+    `;
+    
+    try {
+      const tablesResult = await client.query(tablesCheckQuery);
+      console.log('Created Tables:', tablesResult.rows.map(row => row.table_name));
+    } catch (listTablesError) {
+      console.error('Error listing created tables:', listTablesError);
+    }
 
     // Insert Roles
     const rolesQuery = `
@@ -285,9 +343,17 @@ async function initDB() {
         ('normal_user'),
         ('admin'),
         ('observer')
-      ON CONFLICT (RoleName) DO NOTHING;
+      ON CONFLICT (RoleName) DO NOTHING
+      RETURNING *;
     `;
-    await client.query(rolesQuery);
+    
+    try {
+      const rolesResult = await client.query(rolesQuery);
+      console.log('Inserted Roles:', rolesResult.rows);
+    } catch (rolesError) {
+      console.error('Error inserting roles:', rolesError);
+      throw rolesError;
+    }
 
     // Insert Permissions
     const permissionsQuery = `
@@ -321,10 +387,11 @@ async function initDB() {
     await client.query(rolePermissionsQuery);
 
     await client.query('COMMIT');
-    console.log("Database setup and roles/permissions inserted successfully!");
+    console.log("Database setup completed successfully!");
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error("Error during initialization:", err);
+    console.error("Comprehensive Error during initialization:", err);
+    throw err;
   } finally {
     await client.end();
   }

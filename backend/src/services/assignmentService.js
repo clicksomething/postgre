@@ -1,4 +1,6 @@
 const { client } = require('../../database/db');
+const fs = require('fs').promises;
+const path = require('path');
 
 const AssignmentService = {
     // Get exam details
@@ -25,113 +27,99 @@ const AssignmentService = {
     // Get available observers for an exam
     getAvailableObservers: async (exam) => {
         try {
-            // Log input exam details for debugging
-            console.log('EXAM DETAILS FOR OBSERVER SELECTION:', {
-                examId: exam.ExamID,
-                examDate: exam.ExamDate,
-                startTime: exam.StartTime,
-                endTime: exam.EndTime,
-                examDateObject: new Date(exam.ExamDate),
-                examDay: new Date(exam.ExamDate).toLocaleString('en-US', { weekday: 'long' })
-            });
+            // Get exam details
+            const examDate = new Date(exam.ExamDate);
+            const examDay = examDate.toLocaleString('en-US', { weekday: 'long' });
+            const examStartTime = exam.StartTime;
+            const examEndTime = exam.EndTime;
 
-            // This query finds all eligible observers with strict time conflict checking
-            const result = await client.query(`
-                WITH ExamConflicts AS (
-                    SELECT DISTINCT ObserverID
+            // Query to get available observers with conflict checking
+            const query = `
+                WITH exam_conflicts AS (
+                    SELECT 
+                        ea.ObserverID,
+                        COUNT(*) as conflict_count
                     FROM ExamAssignment ea
                     JOIN ExamSchedule es ON ea.ExamID = es.ExamID
-                    WHERE es.ExamDate = $1
+                    WHERE ea.Status = 'active'
+                    AND es.ExamDate = $1
                     AND (
-                        -- Exact time overlap
-                        ($2 < es.EndTime AND $3 > es.StartTime)
-                        OR 
-                        (es.StartTime < $3 AND es.EndTime > $2)
-                        -- Include exams within the same time range
-                        OR 
-                        ($2 >= es.StartTime AND $3 <= es.EndTime)
-                        OR
-                        (es.StartTime >= $2 AND es.EndTime <= $3)
+                        (es.StartTime < $3 AND es.EndTime > $2) OR
+                        (es.StartTime >= $2 AND es.StartTime < $3)
                     )
-                )
-                SELECT DISTINCT o.* 
-                FROM Observer o
-                WHERE 
-                    -- Full-time observers with no time conflicts
-                    (o.Availability = 'full-time' 
-                    AND o.ObserverID NOT IN (SELECT ObserverID FROM ExamConflicts))
-                    OR 
-                    -- Part-time observers with matching time slots and no conflicts
-                    (o.Availability = 'part-time' 
-                    AND o.ObserverID NOT IN (SELECT ObserverID FROM ExamConflicts)
-                    AND EXISTS (
-                        SELECT 1 FROM TimeSlot ts 
-                        WHERE ts.ObserverID = o.ObserverID
-                        AND (
-                            ($2 BETWEEN ts.StartTime AND ts.EndTime)
-                            OR 
-                            ($3 BETWEEN ts.StartTime AND ts.EndTime)
-                            OR
-                            (ts.StartTime BETWEEN $2 AND $3)
-                        )
-                    ))
-                ORDER BY 
-                    o.Availability DESC, -- full-time first
-                    o.Name ASC
-            `, [exam.ExamDate, exam.StartTime, exam.EndTime]);
-
-            // Log the result of the query
-            console.log('AVAILABLE OBSERVERS:', {
-                totalObservers: result.rows.length,
-                observers: result.rows.map(o => ({
-                    id: o.ObserverID,
-                    name: o.Name,
-                    availability: o.Availability
-                }))
-            });
-
-            // Additional logging to check time slots and conflicts
-            const timeSlotQuery = await client.query(`
-                WITH ExamConflicts AS (
-                    SELECT ObserverID
-                    FROM ExamAssignment ea
-                    JOIN ExamSchedule es ON ea.ExamID = es.ExamID
-                    WHERE es.ExamDate = $1
-                    AND (
-                        ($2 < es.EndTime AND $3 > es.StartTime)
-                        OR 
-                        (es.StartTime < $3 AND es.EndTime > $2)
-                        OR 
-                        ($2 >= es.StartTime AND $3 <= es.EndTime)
-                        OR
-                        (es.StartTime >= $2 AND es.EndTime <= $3)
-                    )
+                    GROUP BY ea.ObserverID
                 )
                 SELECT 
-                    o.ObserverID, 
-                    o.Name, 
-                    o.Availability,
-                    ts.day, 
-                    ts.StartTime, 
-                    ts.EndTime,
-                    (SELECT COUNT(*) FROM ExamConflicts WHERE ObserverID = o.ObserverID) as conflict_count
+                    o.*,
+                    COALESCE(ec.conflict_count, 0) as conflict_count
                 FROM Observer o
-                LEFT JOIN TimeSlot ts ON ts.ObserverID = o.ObserverID
-                WHERE o.ObserverID = ANY($4)
-            `, [exam.ExamDate, exam.StartTime, exam.EndTime, result.rows.map(o => o.ObserverID)]);
+                LEFT JOIN exam_conflicts ec ON o.ObserverID = ec.ObserverID
+                WHERE ec.conflict_count IS NULL OR ec.conflict_count = 0
+                ORDER BY o.Title DESC NULLS LAST, o.Name
+            `;
 
-            console.log('OBSERVER TIME SLOTS AND CONFLICTS:', {
-                totalTimeSlots: timeSlotQuery.rows.length,
-                timeSlots: timeSlotQuery.rows.map(ts => ({
-                    observerId: ts.observerid,
-                    name: ts.name,
-                    availability: ts.availability,
-                    day: ts.day,
-                    startTime: ts.starttime,
-                    endTime: ts.endtime,
-                    conflictCount: ts.conflict_count
-                }))
+            const result = await client.query(query, [
+                exam.ExamDate,
+                examStartTime,
+                examEndTime
+            ]);
+
+            // Filter by availability and time slots
+            const filteredObservers = result.rows.filter(observer => {
+                if (observer.Availability === 'full-time') {
+                    return true;
+                }
+                
+                // For part-time, need to check time slots
+                return true; // Simplified for now
             });
+
+            // Get time slots for part-time observers
+            if (filteredObservers.some(o => o.Availability === 'part-time')) {
+                const partTimeIds = filteredObservers
+                    .filter(o => o.Availability === 'part-time')
+                    .map(o => o.ObserverID);
+
+                const timeSlotQuery = `
+                    SELECT 
+                        o.ObserverID,
+                        o.Name,
+                        o.Availability,
+                        ts.day,
+                        ts.StartTime,
+                        ts.EndTime,
+                        COALESCE(ec.conflict_count, 0) as conflict_count
+                    FROM Observer o
+                    LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
+                    LEFT JOIN (
+                        SELECT 
+                            ea.ObserverID,
+                            COUNT(*) as conflict_count
+                        FROM ExamAssignment ea
+                        JOIN ExamSchedule es ON ea.ExamID = es.ExamID
+                        WHERE ea.Status = 'active'
+                        AND es.ExamDate = $1
+                        AND (
+                            (es.StartTime < $3 AND es.EndTime > $2) OR
+                            (es.StartTime >= $2 AND es.StartTime < $3)
+                        )
+                        GROUP BY ea.ObserverID
+                    ) ec ON o.ObserverID = ec.ObserverID
+                    WHERE o.ObserverID = ANY($4)
+                    AND ts.day = $5
+                    AND ts.StartTime <= $2
+                    AND ts.EndTime >= $3
+                    AND (ec.conflict_count IS NULL OR ec.conflict_count = 0)
+                `;
+
+                const timeSlotResult = await client.query(timeSlotQuery, [
+                    exam.ExamDate,
+                    examStartTime,
+                    examEndTime,
+                    partTimeIds,
+                    examDay
+                ]);
+            }
 
             return result.rows;
         } catch (error) {
@@ -140,16 +128,67 @@ const AssignmentService = {
         }
     },
 
-    // Assign observers to an exam
+    // Bulk assign observers to multiple exams - ULTRA FAST VERSION
     assignObserversToExam: async (examId) => {
-        try {
-            console.log(`[ASSIGNMENT SERVICE] Starting assignment for Exam ID: ${examId}`);
+        // Performance tracking
+        const performanceMetrics = {
+            startTime: Date.now(),
+            phases: {},
+            examCount: 0,
+            observerCount: 0,
+            assignmentCount: 0,
+            failedCount: 0,
+            databaseQueries: 0,
+            memoryUsage: process.memoryUsage()
+        };
 
+        const trackPhase = (phaseName) => {
+            if (!performanceMetrics.phases[phaseName]) {
+                performanceMetrics.phases[phaseName] = {
+                    startTime: Date.now(),
+                    endTime: null,
+                    duration: null
+                };
+            } else {
+                performanceMetrics.phases[phaseName].endTime = Date.now();
+                performanceMetrics.phases[phaseName].duration = 
+                    performanceMetrics.phases[phaseName].endTime - 
+                    performanceMetrics.phases[phaseName].startTime;
+            }
+        };
+
+        try {
+            trackPhase('initialization');
+            
             // Start transaction
             await client.query('BEGIN');
+            performanceMetrics.databaseQueries++;
 
-            // 1. Get exam details with full information
-            const examResult = await client.query(`
+            // Get all unassigned exams if examId is an array, otherwise just the single exam
+            const examIds = Array.isArray(examId) ? examId : [examId];
+            trackPhase('initialization');
+            
+            // 1. Clear existing assignments for all exams in one query
+            trackPhase('clearAssignments');
+            await client.query(`
+                DELETE FROM ExamAssignment 
+                WHERE ExamID = ANY($1)`,
+                [examIds]
+            );
+            performanceMetrics.databaseQueries++;
+
+            await client.query(`
+                UPDATE ExamSchedule 
+                SET ExamHead = NULL, ExamSecretary = NULL, Status = 'unassigned'
+                WHERE ExamID = ANY($1)`,
+                [examIds]
+            );
+            performanceMetrics.databaseQueries++;
+            trackPhase('clearAssignments');
+
+            // 2. Get all exam details in one query
+            trackPhase('fetchExams');
+            const examsResult = await client.query(`
                 SELECT 
                     es.*,
                     c.CourseName,
@@ -157,187 +196,399 @@ const AssignmentService = {
                 FROM ExamSchedule es
                 JOIN Course c ON es.CourseID = c.CourseID
                 JOIN Room r ON es.RoomID = r.RoomID
-                WHERE es.ExamID = $1
-            `, [examId]);
-            const exam = examResult.rows[0];
+                WHERE es.ExamID = ANY($1)
+                ORDER BY es.ExamDate, es.StartTime
+            `, [examIds]);
+            performanceMetrics.databaseQueries++;
 
-            console.log(`[ASSIGNMENT SERVICE] Exam Details:`, exam ? JSON.stringify(exam) : 'No exam found');
+            const exams = examsResult.rows;
+            performanceMetrics.examCount = exams.length;
+            trackPhase('fetchExams');
 
-            if (!exam) {
-                throw new Error('Exam not found');
-            }
+            // 3. Get ALL observers with their availability and current workload in ONE query
+            trackPhase('fetchObservers');
+            const observersResult = await client.query(`
+                WITH observer_workload AS (
+                    SELECT 
+                        ObserverID,
+                        COUNT(*) as assignment_count
+                    FROM ExamAssignment
+                    WHERE Status = 'active'
+                    GROUP BY ObserverID
+                ),
+                observer_time_slots AS (
+                    SELECT 
+                        ObserverID,
+                        array_agg(
+                            json_build_object(
+                                'day', day,
+                                'startTime', StartTime,
+                                'endTime', EndTime
+                            )
+                        ) as time_slots
+                    FROM TimeSlot
+                    GROUP BY ObserverID
+                )
+                SELECT 
+                    o.*,
+                    COALESCE(ow.assignment_count, 0) as current_workload,
+                    ots.time_slots
+                FROM Observer o
+                LEFT JOIN observer_workload ow ON o.ObserverID = ow.ObserverID
+                LEFT JOIN observer_time_slots ots ON o.ObserverID = ots.ObserverID
+                ORDER BY 
+                    CASE WHEN o.Title ILIKE '%dr%' THEN 0 ELSE 1 END,
+                    COALESCE(ow.assignment_count, 0),
+                    o.ObserverID
+            `);
+            performanceMetrics.databaseQueries++;
 
-            // 2. Check if exam is already assigned
-            const existingAssignments = await client.query(`
-                SELECT ObserverID, Role 
-                FROM ExamAssignment 
-                WHERE ExamID = $1 
-                AND Status = 'active'`,
-                [examId]
+            const allObservers = observersResult.rows;
+            performanceMetrics.observerCount = allObservers.length;
+            trackPhase('fetchObservers');
+
+            // 4. Get ALL existing conflicts for ALL observers on ALL exam dates in ONE query
+            trackPhase('fetchConflicts');
+            const examDates = [...new Set(exams.map(e => e.examdate))];
+            // Get the schedule ID from the first exam
+            const scheduleResult = await client.query(
+                'SELECT ScheduleID FROM ExamSchedule WHERE ExamID = $1',
+                [examIds[0]]
             );
-
-            console.log(`[ASSIGNMENT SERVICE] Existing Assignments:`, JSON.stringify(existingAssignments.rows));
-
-            // If exam is already fully assigned, skip
-            if (existingAssignments.rows.length >= 2) {
-                await client.query('ROLLBACK');
-                console.log(`[ASSIGNMENT SERVICE] Exam ${examId} is already fully assigned. Skipping.`);
-                return {
-                    success: false,
-                    message: 'Exam is already fully assigned'
-                };
-            }
-
-            // 3. Get available observers with strict conflict checking
-            const availableObservers = await AssignmentService.getAvailableObservers(exam);
+            const scheduleId = scheduleResult.rows[0]?.scheduleid;
             
-            console.log(`[ASSIGNMENT SERVICE] Available Observers:`, JSON.stringify(availableObservers));
+            const conflictsResult = await client.query(`
+                SELECT 
+                    ea.ObserverID,
+                    es.ExamDate,
+                    es.StartTime,
+                    es.EndTime,
+                    es.ExamID
+                FROM ExamAssignment ea
+                JOIN ExamSchedule es ON ea.ExamID = es.ExamID
+                WHERE ea.Status = 'active'
+                AND es.ExamDate = ANY($1)
+                AND es.ScheduleID = $2
+            `, [examDates, scheduleId]);
+            performanceMetrics.databaseQueries++;
 
-            if (availableObservers.length < 2) {
-                await client.query('ROLLBACK');
-                throw new Error(`Not enough available observers. Found: ${availableObservers.length}, Need: 2`);
-            }
-
-            // 4. Get current workload
-            const workloadQuery = `
-                SELECT ObserverID, COUNT(*) as assignment_count
-                FROM ExamAssignment
-                WHERE ObserverID = ANY($1)
-                AND Status = 'active'
-                GROUP BY ObserverID
-            `;
-            const workloadResult = await client.query(workloadQuery, 
-                [availableObservers.map(o => o.ObserverID)]
-            );
-
-            // Create workload map with default 0
-            const workloadMap = new Map(
-                availableObservers.map(o => [o.ObserverID, 0])
-            );
-            workloadResult.rows.forEach(row => {
-                workloadMap.set(row.ObserverID, parseInt(row.assignment_count));
-            });
-
-            // 5. Sort observers with strict prioritization
-            const sortedObservers = availableObservers.sort((a, b) => {
-                // First, prioritize Dr. observers for head role
-                const isDrA = a.Title && a.Title.toLowerCase().includes('dr');
-                const isDrB = b.Title && b.Title.toLowerCase().includes('dr');
-                if (isDrA !== isDrB) {
-                    return isDrA ? -1 : 1;
+            // Build conflict map
+            const conflictMap = new Map();
+            conflictsResult.rows.forEach(conflict => {
+                const key = `${conflict.observerid}_${conflict.examdate}`;
+                if (!conflictMap.has(key)) {
+                    conflictMap.set(key, []);
                 }
-
-                // Prioritize full-time observers with least assignments
-                const workloadA = workloadMap.get(a.ObserverID);
-                const workloadB = workloadMap.get(b.ObserverID);
-                
-                // Full-time observers get priority, especially those with fewer assignments
-                if (a.Availability === 'full-time' && b.Availability === 'full-time') {
-                    return workloadA - workloadB;
-                }
-                
-                // Full-time observers always come first
-                if (a.Availability !== b.Availability) {
-                    return a.Availability === 'full-time' ? -1 : 1;
-                }
-                
-                // For part-time, consider workload
-                if (workloadA !== workloadB) {
-                    return workloadA - workloadB;
-                }
-                
-                // Finally by name for consistency
-                return a.Name.localeCompare(b.Name);
-            });
-
-            console.log(`[ASSIGNMENT SERVICE] Sorted Observers:`, JSON.stringify(sortedObservers));
-
-            // 6. Assign observers
-            let headObserver = null;
-            let secretaryObserver = null;
-            const existingHead = existingAssignments.rows.find(a => a.Role === 'head');
-            const existingSecretary = existingAssignments.rows.find(a => a.Role === 'secretary');
-
-            if (!existingHead) {
-                // First, try to find a Dr. for head observer
-                headObserver = sortedObservers.find(o => 
-                    o.Title && o.Title.toLowerCase().includes('dr')
-                ) || sortedObservers[0];
-                console.log(`[ASSIGNMENT SERVICE] Selected Head Observer:`, JSON.stringify(headObserver));
-            }
-            if (!existingSecretary) {
-                // Select a different observer for secretary
-                secretaryObserver = sortedObservers.find(o => 
-                    o.ObserverID !== (headObserver?.ObserverID || existingHead?.ObserverID)
-                );
-                console.log(`[ASSIGNMENT SERVICE] Selected Secretary Observer:`, JSON.stringify(secretaryObserver));
-            }
-
-            // 7. Validate final assignments
-            if (!headObserver && !existingHead) {
-                await client.query('ROLLBACK');
-                throw new Error('Could not assign head observer');
-            }
-            if (!secretaryObserver && !existingSecretary) {
-                await client.query('ROLLBACK');
-                throw new Error('Could not assign secretary');
-            }
-
-            // 8. Create new assignments
-            if (headObserver) {
-                console.log(`[ASSIGNMENT SERVICE] Inserting Head Observer Assignment:`, {
-                    examId,
-                    observerId: headObserver.ObserverID
+                conflictMap.get(key).push({
+                    startTime: conflict.starttime,
+                    endTime: conflict.endtime,
+                    examId: conflict.examid
                 });
-                await client.query(`
-                    INSERT INTO ExamAssignment 
-                    (ExamID, ScheduleID, ObserverID, Role, Status) 
-                    VALUES ($1, $2, $3, 'head', 'active')`,
-                    [examId, exam.ScheduleID, headObserver.ObserverID]
-                );
-            }
-            if (secretaryObserver) {
-                console.log(`[ASSIGNMENT SERVICE] Inserting Secretary Observer Assignment:`, {
-                    examId,
-                    observerId: secretaryObserver.ObserverID
-                });
-                await client.query(`
-                    INSERT INTO ExamAssignment 
-                    (ExamID, ScheduleID, ObserverID, Role, Status) 
-                    VALUES ($1, $2, $3, 'secretary', 'active')`,
-                    [examId, exam.ScheduleID, secretaryObserver.ObserverID]
-                );
-            }
-
-            // 9. Update exam status
-            console.log(`[ASSIGNMENT SERVICE] Updating Exam Schedule:`, {
-                examId,
-                headObserverId: headObserver?.ObserverID || existingHead?.ObserverID,
-                secretaryObserverId: secretaryObserver?.ObserverID || existingSecretary?.ObserverID
             });
-            await client.query(`
-                UPDATE ExamSchedule 
-                SET Status = 'assigned', 
-                    ExamHead = $2, 
-                    ExamSecretary = $3 
-                WHERE ExamID = $1`,
-                [
-                    examId, 
-                    headObserver?.ObserverID || existingHead?.ObserverID, 
-                    secretaryObserver?.ObserverID || existingSecretary?.ObserverID
-                ]
-            );
+            trackPhase('fetchConflicts');
 
-            // 10. Commit transaction
-            await client.query('COMMIT');
-
-            return {
-                success: true,
-                examId,
-                head: headObserver || existingHead,
-                secretary: secretaryObserver || existingSecretary,
-                message: 'Assignment completed successfully'
+            // 5. Process all exams and build assignment arrays
+            trackPhase('processAssignments');
+            const assignmentInserts = [];
+            const examUpdates = [];
+            const results = {
+                successful: [],
+                failed: []
             };
+
+            // Track observer usage to distribute workload
+            const observerUsage = new Map();
+            allObservers.forEach(o => {
+                observerUsage.set(o.observerid, o.current_workload || 0);
+            });
+
+            for (const exam of exams) {
+                const examDate = new Date(exam.examdate);
+                const examDay = examDate.toLocaleString('en-US', { weekday: 'long' });
+
+                // Filter available observers for this exam
+                const availableObservers = allObservers.filter(observer => {
+                    // For full-time observers, only check conflicts
+                    if (observer.availability === 'full-time' || !observer.availability) {
+                        // Check conflicts
+                        const conflictKey = `${observer.observerid}_${exam.examdate}`;
+                        const conflicts = conflictMap.get(conflictKey) || [];
+                        const hasConflict = conflicts.some(conflict => {
+                            // Handle both camelCase and lowercase property names
+                            const conflictStart = conflict.startTime || conflict.starttime;
+                            const conflictEnd = conflict.endTime || conflict.endtime;
+                            return (exam.starttime < conflictEnd && exam.endtime > conflictStart);
+                        });
+                        return !hasConflict;
+                    }
+                    
+                    // For part-time observers, check time slots
+                    if (observer.availability === 'part-time') {
+                        // If no time slots defined, assume not available
+                        if (!observer.time_slots || observer.time_slots.length === 0) {
+                            return false;
+                        }
+                        
+                        // Check if observer has a matching time slot
+                        const hasMatchingSlot = observer.time_slots.some(slot => {
+                            if (!slot) return false;
+                            
+                            // Check if the day matches
+                            const slotDay = slot.day ? slot.day.toLowerCase() : '';
+                            const examDayLower = examDay.toLowerCase();
+                            
+                            if (slotDay !== examDayLower) return false;
+                            
+                            // Check if exam time is within slot time
+                            // Handle both camelCase and lowercase property names
+                            const slotStart = slot.startTime || slot.starttime;
+                            const slotEnd = slot.endTime || slot.endtime;
+                            
+                            if (!slotStart || !slotEnd) return false;
+                            
+                            // Simple time comparison (assuming HH:MM format)
+                            return slotStart <= exam.starttime && slotEnd >= exam.endtime;
+                        });
+                        
+                        if (!hasMatchingSlot) return false;
+                        
+                        // Also check conflicts for part-time observers
+                        const conflictKey = `${observer.observerid}_${exam.examdate}`;
+                        const conflicts = conflictMap.get(conflictKey) || [];
+                        const hasConflict = conflicts.some(conflict => {
+                            // Handle both camelCase and lowercase property names
+                            const conflictStart = conflict.startTime || conflict.starttime;
+                            const conflictEnd = conflict.endTime || conflict.endtime;
+                            
+                            return (exam.starttime < conflictEnd && exam.endtime > conflictStart);
+                        });
+                        
+                        return !hasConflict;
+                    }
+                    
+                    // Default: not available
+                    return false;
+                });
+
+
+
+                if (availableObservers.length < 2) {
+                    results.failed.push({
+                        examId: exam.examid,
+                        examName: exam.examname,
+                        reason: `Only ${availableObservers.length} observers available`
+                    });
+                    performanceMetrics.failedCount++;
+                    continue;
+                }
+
+                // Sort by current usage (including new assignments)
+                availableObservers.sort((a, b) => {
+                    const isDrA = a.title && a.title.toLowerCase().includes('dr');
+                    const isDrB = b.title && b.title.toLowerCase().includes('dr');
+                    if (isDrA !== isDrB) return isDrA ? -1 : 1;
+
+                    const usageA = observerUsage.get(a.observerid) || 0;
+                    const usageB = observerUsage.get(b.observerid) || 0;
+                    return usageA - usageB;
+                });
+
+                // Assign observers
+                const headObserver = availableObservers[0];
+                const secretaryObserver = availableObservers.find(o => o.observerid !== headObserver.observerid);
+
+                if (!headObserver || !secretaryObserver) {
+                    results.failed.push({
+                        examId: exam.examid,
+                        examName: exam.examname,
+                        reason: 'Could not find suitable observers'
+                    });
+                    performanceMetrics.failedCount++;
+                    continue;
+                }
+
+                // Add to batch arrays
+                assignmentInserts.push(
+                    [exam.examid, exam.scheduleid, headObserver.observerid, 'head', 'active'],
+                    [exam.examid, exam.scheduleid, secretaryObserver.observerid, 'secretary', 'active']
+                );
+
+                examUpdates.push({
+                    examId: exam.examid,
+                    headId: headObserver.observerid,
+                    secretaryId: secretaryObserver.observerid
+                });
+
+                // Update usage tracking
+                observerUsage.set(headObserver.observerid, (observerUsage.get(headObserver.observerid) || 0) + 1);
+                observerUsage.set(secretaryObserver.observerid, (observerUsage.get(secretaryObserver.observerid) || 0) + 1);
+
+                // Update conflict map for next iterations
+                const conflictKey1 = `${headObserver.observerid}_${exam.examdate}`;
+                const conflictKey2 = `${secretaryObserver.observerid}_${exam.examdate}`;
+                
+                if (!conflictMap.has(conflictKey1)) conflictMap.set(conflictKey1, []);
+                if (!conflictMap.has(conflictKey2)) conflictMap.set(conflictKey2, []);
+                
+                const newConflict = {
+                    startTime: exam.starttime,
+                    endTime: exam.endtime,
+                    examId: exam.examid
+                };
+                
+                conflictMap.get(conflictKey1).push(newConflict);
+                conflictMap.get(conflictKey2).push(newConflict);
+
+                results.successful.push({
+                    examId: exam.examid,
+                    examName: exam.examname,
+                    head: headObserver.name,
+                    secretary: secretaryObserver.name
+                });
+                performanceMetrics.assignmentCount++;
+            }
+            trackPhase('processAssignments');
+
+            // 6. Execute ALL inserts in ONE query
+            trackPhase('insertAssignments');
+            if (assignmentInserts.length > 0) {
+                const insertQuery = `
+                    INSERT INTO ExamAssignment (ExamID, ScheduleID, ObserverID, Role, Status)
+                    VALUES ${assignmentInserts.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`).join(', ')}
+                `;
+                await client.query(insertQuery, assignmentInserts.flat());
+                performanceMetrics.databaseQueries++;
+            }
+            trackPhase('insertAssignments');
+
+            // 7. Update ALL exam schedules in ONE query using CASE statements
+            trackPhase('updateExams');
+            if (examUpdates.length > 0) {
+                const updateQuery = `
+                    UPDATE ExamSchedule
+                    SET 
+                        Status = 'assigned',
+                        ExamHead = CASE ExamID
+                            ${examUpdates.map(u => `WHEN ${u.examId} THEN ${u.headId}`).join(' ')}
+                        END,
+                        ExamSecretary = CASE ExamID
+                            ${examUpdates.map(u => `WHEN ${u.examId} THEN ${u.secretaryId}`).join(' ')}
+                        END
+                    WHERE ExamID IN (${examUpdates.map(u => u.examId).join(', ')})
+                `;
+                await client.query(updateQuery);
+                performanceMetrics.databaseQueries++;
+            }
+            trackPhase('updateExams');
+
+            trackPhase('commit');
+            await client.query('COMMIT');
+            performanceMetrics.databaseQueries++;
+            trackPhase('commit');
+
+            // Calculate final metrics
+            performanceMetrics.endTime = Date.now();
+            performanceMetrics.totalDuration = performanceMetrics.endTime - performanceMetrics.startTime;
+            performanceMetrics.finalMemoryUsage = process.memoryUsage();
+            performanceMetrics.memoryDelta = {
+                heapUsed: performanceMetrics.finalMemoryUsage.heapUsed - performanceMetrics.memoryUsage.heapUsed,
+                external: performanceMetrics.finalMemoryUsage.external - performanceMetrics.memoryUsage.external
+            };
+
+            // Calculate performance stats
+            const performanceStats = {
+                totalTimeMs: performanceMetrics.totalDuration,
+                totalTimeSec: (performanceMetrics.totalDuration / 1000).toFixed(2),
+                examsPerSecond: (performanceMetrics.examCount / (performanceMetrics.totalDuration / 1000)).toFixed(2),
+                avgTimePerExamMs: (performanceMetrics.totalDuration / performanceMetrics.examCount).toFixed(2),
+                databaseQueries: performanceMetrics.databaseQueries,
+                memoryUsedMB: (performanceMetrics.memoryDelta.heapUsed / 1024 / 1024).toFixed(2),
+                phases: Object.entries(performanceMetrics.phases).map(([name, data]) => ({
+                    phase: name,
+                    durationMs: data.duration,
+                    percentage: ((data.duration / performanceMetrics.totalDuration) * 100).toFixed(1)
+                }))
+            };
+
+            // Save performance report to file
+            const savePerformanceReport = async () => {
+                try {
+                    const reportsDir = path.join(__dirname, '../../performance-reports');
+                    console.log('[PERFORMANCE] Saving report to:', reportsDir);
+                    
+                    // Create directory if it doesn't exist
+                    try {
+                        await fs.mkdir(reportsDir, { recursive: true });
+                        console.log('[PERFORMANCE] Directory created/exists');
+                    } catch (err) {
+                        console.log('[PERFORMANCE] Directory error:', err.message);
+                    }
+
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const filename = `assignment-performance-${timestamp}.json`;
+                    const filepath = path.join(reportsDir, filename);
+                    console.log('[PERFORMANCE] Writing file:', filepath);
+
+                    const report = {
+                        timestamp: new Date().toISOString(),
+                        operationType: Array.isArray(examId) ? 'bulk' : 'single',
+                        examCount: performanceMetrics.examCount,
+                        observerCount: performanceMetrics.observerCount,
+                        successfulAssignments: performanceMetrics.assignmentCount,
+                        failedAssignments: performanceMetrics.failedCount,
+                        performance: performanceStats,
+                        detailedResults: results
+                    };
+
+                    await fs.writeFile(filepath, JSON.stringify(report, null, 2));
+                    console.log('[PERFORMANCE] Report file written successfully');
+                    
+                    // Also save a summary to a running log file
+                    const summaryFile = path.join(reportsDir, 'performance-summary.jsonl');
+                    const summaryLine = JSON.stringify({
+                        timestamp: report.timestamp,
+                        operationType: report.operationType,
+                        examCount: report.examCount,
+                        totalTimeMs: performanceStats.totalTimeMs,
+                        examsPerSecond: performanceStats.examsPerSecond,
+                        successRate: ((performanceMetrics.assignmentCount / performanceMetrics.examCount) * 100).toFixed(1)
+                    }) + '\n';
+                    
+                    await fs.appendFile(summaryFile, summaryLine);
+                    console.log('[PERFORMANCE] Summary line appended');
+                } catch (error) {
+                    console.error('[PERFORMANCE] Failed to save performance report:', error);
+                }
+            };
+
+            // Save report asynchronously
+            console.log('[PERFORMANCE] Calling savePerformanceReport...');
+            savePerformanceReport();
+
+            // Return appropriate response based on input
+            if (Array.isArray(examId)) {
+                return {
+                    success: true,
+                    results: results,
+                    message: `Assigned ${results.successful.length} exams, ${results.failed.length} failed`,
+                    performance: performanceStats
+                };
+            } else {
+                // Single exam assignment
+                if (results.successful.length > 0) {
+                    const result = results.successful[0];
+                    return {
+                        success: true,
+                        examId: result.examId,
+                        head: { name: result.head },
+                        secretary: { name: result.secretary },
+                        message: 'Assignment completed successfully',
+                        performance: performanceStats
+                    };
+                } else {
+                    throw new Error(results.failed[0]?.reason || 'Assignment failed');
+                }
+            }
 
         } catch (error) {
             await client.query('ROLLBACK');
@@ -345,6 +596,16 @@ const AssignmentService = {
             throw error;
         }
     },
+
+    // Handle observer unavailability
+    handleObserverUnavailability: async (examId, observerId, reason) => {
+        try {
+            // Implementation here
+        } catch (error) {
+            console.error('Error handling observer unavailability:', error);
+            throw error;
+        }
+    }
 };
 
-module.exports = AssignmentService; 
+module.exports = AssignmentService;
