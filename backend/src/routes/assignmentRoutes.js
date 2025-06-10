@@ -18,6 +18,9 @@ router.get('/statistics', assignmentController.getAssignmentStats);
 router.get('/performance/history', assignmentController.getPerformanceHistory);
 router.get('/performance/stats', assignmentController.getPerformanceStats);
 
+// Genetic algorithm assignment
+router.post('/schedules/:scheduleId/assign-genetic', assignmentController.assignObserversWithGA);
+
 // Handle unavailability with file upload support
 router.post(
     '/exams/:examId/observers/:observerId/unavailable',

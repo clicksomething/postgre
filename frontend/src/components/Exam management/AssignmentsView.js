@@ -57,22 +57,39 @@ const AssignmentsView = () => {
     };
 
     const handleAlgorithmSelection = async (algorithmId) => {
-        if (algorithmId === 'random') {
-            try {
-                const token = localStorage.getItem('authToken');
-                
-                const response = await axios.post(
-                    `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`, 
-                    {}, 
-                    {
-                        headers: { 
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        }
+        try {
+            const token = localStorage.getItem('authToken');
+            let endpoint = '';
+            let requestBody = {};
+            
+            // Set the appropriate endpoint based on algorithm selection
+            if (algorithmId === 'random') {
+                endpoint = `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`;
+            } else if (algorithmId === 'genetic') {
+                endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/assign-genetic`;
+                // You can customize genetic algorithm parameters here if needed
+                requestBody = {
+                    populationSize: 50,
+                    generations: 30,
+                    mutationRate: 0.1,
+                    crossoverRate: 0.7,
+                    elitismRate: 0.1
+                };
+            }
+            
+            const response = await axios.post(
+                endpoint, 
+                requestBody, 
+                {
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     }
-                );
+                }
+            );
 
-                // Show distribution results
+            // Handle response based on algorithm type
+            if (algorithmId === 'random') {
                 const { assignments, totalExams, assignedExams } = response.data;
                 
                 alert(`Distribution Complete!\n` +
@@ -82,19 +99,29 @@ const AssignmentsView = () => {
                           `Exam ${a.examId}: Head - ${a.headObserver}, Secretary - ${a.secretary}`
                       ).join('\n')}`
                 );
-
-                // Refresh the schedules to reflect new assignments
-                fetchScheduleAssignments();
-            } catch (error) {
-                console.error('Full Distribution Error:', error);
+            } else if (algorithmId === 'genetic') {
+                const { totalExams, assignedExams, failedExams, fitness, convergenceGeneration } = response.data;
                 
-                // More detailed error message
-                const errorMessage = error.response?.data?.errorMessage || 
-                                     error.response?.data?.message || 
-                                     'Unknown error occurred';
-                
-                alert(`Distribution Failed: ${errorMessage}`);
+                alert(`Genetic Algorithm Distribution Complete!\n` +
+                      `Total Exams: ${totalExams}\n` +
+                      `Successful Assignments: ${assignedExams}\n` +
+                      `Failed Assignments: ${failedExams}\n` +
+                      `Best Fitness Score: ${fitness ? fitness.toFixed(3) : 'N/A'}\n` +
+                      `Converged at Generation: ${convergenceGeneration || 'N/A'}`
+                );
             }
+
+            // Refresh the schedules to reflect new assignments
+            fetchScheduleAssignments();
+        } catch (error) {
+            console.error('Full Distribution Error:', error);
+            
+            // More detailed error message
+            const errorMessage = error.response?.data?.errorMessage || 
+                                 error.response?.data?.message || 
+                                 'Unknown error occurred';
+            
+            alert(`Distribution Failed: ${errorMessage}`);
         }
         
         // Close the modal

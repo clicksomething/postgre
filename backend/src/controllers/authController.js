@@ -57,7 +57,7 @@ const registerUser = async (req, res) => {
             [userInfoId, roleId]
         );
 
-        res.status(201).json({ message: 'User registered successfully', userId: userResult.rows[0].UserID });
+        res.status(201).json({ message: 'User registered successfully', userId: userResult.rows[0].userid });
     } catch (err) {
         console.error('Error registering user:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
@@ -164,7 +164,7 @@ const login = async (req, res) => {
 
         // Generate a JWT token
         const token = jwt.sign(
-            { userId: user.UserID, roleId: user.RoleID },
+            { userId: user.userid, roleId: user.roleid },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
         );
@@ -172,8 +172,8 @@ const login = async (req, res) => {
         // Return the token and user data
         return res.json({
             token,
-            userId: user.UserID,
-            roleId: user.RoleID,
+            userId: user.userid,
+            roleId: user.roleid,
             isAdmin: user.roleid === 2 // Ensure this matches the admin role ID
         });
     } catch (err) {
