@@ -75,6 +75,8 @@ const AssignmentsView = () => {
                     crossoverRate: 0.7,
                     elitismRate: 0.1
                 };
+            } else if (algorithmId === 'compare') {
+                endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/compare-algorithms`;
             }
             
             const response = await axios.post(
@@ -109,6 +111,27 @@ const AssignmentsView = () => {
                       `Best Fitness Score: ${fitness ? fitness.toFixed(3) : 'N/A'}\n` +
                       `Converged at Generation: ${convergenceGeneration || 'N/A'}`
                 );
+            } else if (algorithmId === 'compare') {
+                const { comparison, appliedAlgorithm, message } = response.data;
+                
+                // Store comparison data in localStorage for the comparison page
+                localStorage.setItem('latestComparison', JSON.stringify(comparison));
+                
+                // Show summary and ask if user wants to see detailed comparison
+                const viewDetails = window.confirm(
+                    `${message}\n\n` +
+                    `Winner: ${comparison.winner}\n` +
+                    `Speed: ${comparison.performance.speedup}\n` +
+                    `Random Score: ${comparison['Random Algorithm'].overallScore}\n` +
+                    `Genetic Score: ${comparison['Genetic Algorithm'].overallScore}\n\n` +
+                    `Applied: ${appliedAlgorithm} Algorithm\n\n` +
+                    `Would you like to view the detailed comparison?`
+                );
+                
+                if (viewDetails) {
+                    // Navigate to comparison page
+                    window.location.href = '/algorithm-comparison';
+                }
             }
 
             // Refresh the schedules to reflect new assignments

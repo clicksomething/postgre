@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard';
 import ManageUsers from './components/User Management/ManageUsers';
 import Navbar from './components/Navbar'; // Import the Navbar component
 import ScheduleDetails from './components/Exam management/ScheduleDetails';
+import AlgorithmComparison from './components/AlgorithmComparison';
 
 const App = () => {
   const [role, setRole] = useState(null);
@@ -78,6 +79,7 @@ const App = () => {
           <Route path="/manage-observers" element={<ManageObservers />} />
           <Route path="/manage-exams" element={role === 'admin' ? <ManageExams /> : <Navigate to="/login" />} />
           <Route path="/schedules/:id" element={<ScheduleDetails />} />
+          <Route path="/algorithm-comparison" element={role === 'admin' ? <AlgorithmComparison /> : <Navigate to="/login" />} />
         </Routes>
       </div>
     </Router>

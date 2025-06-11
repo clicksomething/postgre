@@ -24,6 +24,11 @@ const Navbar = ({ onLogout }) => {
             </Link>
           </li>
           <li>
+            <Link to="/algorithm-comparison" className="nav-link">
+              <i className="fas fa-chart-line"></i> Algorithm Comparison
+            </Link>
+          </li>
+          <li>
             <button className="nav-link logout-button" onClick={onLogout}>
               <i className="fas fa-sign-out-alt"></i> Logout
             </button>

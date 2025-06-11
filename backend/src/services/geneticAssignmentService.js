@@ -1,6 +1,7 @@
 const { client } = require('../../database/db');
 const fs = require('fs').promises;
 const path = require('path');
+const AssignmentQualityMetrics = require('../utils/assignmentQualityMetrics');
 
 class GeneticAssignmentService {
     constructor(options = {}) {
@@ -770,6 +771,36 @@ class GeneticAssignmentService {
             const filename = `ga-assignment-performance-${timestamp}.json`;
             const filepath = path.join(reportsDir, filename);
             
+            // Prepare assignments array for quality metrics
+            // Get the best solution's chromosome which contains the actual assignments
+            const bestChromosome = this.performanceMetrics.bestSolution || results.performance.bestSolution;
+            const assignments = data.exams.map((exam, idx) => {
+                const successfulAssignment = results.successful.find(s => s.examId === exam.examid);
+                if (successfulAssignment) {
+                    // Find the actual observer IDs from the results
+                    const headObserver = data.observers.find(o => o.name === successfulAssignment.head);
+                    const secretaryObserver = data.observers.find(o => o.name === successfulAssignment.secretary);
+                    return {
+                        examId: exam.examid,
+                        headId: headObserver?.observerid || null,
+                        secretaryId: secretaryObserver?.observerid || null
+                    };
+                } else {
+                    return {
+                        examId: exam.examid,
+                        headId: null,
+                        secretaryId: null
+                    };
+                }
+            });
+            
+            // Calculate quality metrics
+            const qualityMetrics = AssignmentQualityMetrics.calculateMetrics(
+                assignments,
+                data.exams,
+                data.observers
+            );
+            
             const report = {
                 timestamp: new Date().toISOString(),
                 algorithm: 'genetic',
@@ -788,6 +819,7 @@ class GeneticAssignmentService {
                 convergenceData: this.performanceMetrics.generations,
                 totalTimeMs: Date.now() - this.performanceMetrics.startTime,
                 examsPerSecond: (data.exams.length / ((Date.now() - this.performanceMetrics.startTime) / 1000)).toFixed(2),
+                qualityMetrics: qualityMetrics,
                 results
             };
             
@@ -802,7 +834,9 @@ class GeneticAssignmentService {
                 successRate: ((results.successful.length / data.exams.length) * 100).toFixed(1),
                 fitness: results.performance.finalFitness.toFixed(3),
                 totalTimeMs: report.totalTimeMs,
-                examsPerSecond: report.examsPerSecond
+                examsPerSecond: report.examsPerSecond,
+                qualityScore: qualityMetrics.overallScore.percentage.toFixed(1),
+                qualityGrade: qualityMetrics.overallScore.grade
             }) + '\n';
             
             await fs.appendFile(summaryFile, summaryLine);

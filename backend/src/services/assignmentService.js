@@ -1,11 +1,12 @@
-const { client } = require('../../database/db');
+const { client: pool } = require('../../database/db');
 const fs = require('fs').promises;
 const path = require('path');
+const AssignmentQualityMetrics = require('../utils/assignmentQualityMetrics');
 
 const AssignmentService = {
     // Get exam details
     getExamDetails: async (examId) => {
-        const result = await client.query(
+        const result = await pool.query(
             'SELECT * FROM ExamSchedule WHERE ExamID = $1',
             [examId]
         );
@@ -14,7 +15,7 @@ const AssignmentService = {
 
     // Get observer workload
     getObserverWorkload: async (observerId, examDate) => {
-        const result = await client.query(`
+        const result = await pool.query(`
             SELECT COUNT(*) as workload 
             FROM ExamAssignment 
             WHERE ObserverID = $1 
@@ -58,7 +59,7 @@ const AssignmentService = {
                 ORDER BY o.Title DESC NULLS LAST, o.Name
             `;
 
-            const result = await client.query(query, [
+            const result = await pool.query(query, [
                 exam.ExamDate,
                 examStartTime,
                 examEndTime
@@ -81,15 +82,15 @@ const AssignmentService = {
                     .map(o => o.ObserverID);
 
                 const timeSlotQuery = `
-                    SELECT 
-                        o.ObserverID,
-                        o.Name,
-                        o.Availability,
-                        ts.day,
-                        ts.StartTime,
-                        ts.EndTime,
+                SELECT 
+                    o.ObserverID, 
+                    o.Name, 
+                    o.Availability,
+                    ts.day, 
+                    ts.StartTime, 
+                    ts.EndTime,
                         COALESCE(ec.conflict_count, 0) as conflict_count
-                    FROM Observer o
+                FROM Observer o
                     LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
                     LEFT JOIN (
                         SELECT 
@@ -105,14 +106,14 @@ const AssignmentService = {
                         )
                         GROUP BY ea.ObserverID
                     ) ec ON o.ObserverID = ec.ObserverID
-                    WHERE o.ObserverID = ANY($4)
+                WHERE o.ObserverID = ANY($4)
                     AND ts.day = $5
                     AND ts.StartTime <= $2
                     AND ts.EndTime >= $3
                     AND (ec.conflict_count IS NULL OR ec.conflict_count = 0)
                 `;
 
-                const timeSlotResult = await client.query(timeSlotQuery, [
+                const timeSlotResult = await pool.query(timeSlotQuery, [
                     exam.ExamDate,
                     examStartTime,
                     examEndTime,
@@ -159,9 +160,9 @@ const AssignmentService = {
 
         try {
             trackPhase('initialization');
-            
+
             // Start transaction
-            await client.query('BEGIN');
+            await pool.query('BEGIN');
             performanceMetrics.databaseQueries++;
 
             // Get all unassigned exams if examId is an array, otherwise just the single exam
@@ -170,14 +171,14 @@ const AssignmentService = {
             
             // 1. Clear existing assignments for all exams in one query
             trackPhase('clearAssignments');
-            await client.query(`
+            await pool.query(`
                 DELETE FROM ExamAssignment 
                 WHERE ExamID = ANY($1)`,
                 [examIds]
             );
             performanceMetrics.databaseQueries++;
 
-            await client.query(`
+            await pool.query(`
                 UPDATE ExamSchedule 
                 SET ExamHead = NULL, ExamSecretary = NULL, Status = 'unassigned'
                 WHERE ExamID = ANY($1)`,
@@ -188,7 +189,7 @@ const AssignmentService = {
 
             // 2. Get all exam details in one query
             trackPhase('fetchExams');
-            const examsResult = await client.query(`
+            const examsResult = await pool.query(`
                 SELECT 
                     es.*,
                     c.CourseName,
@@ -207,12 +208,12 @@ const AssignmentService = {
 
             // 3. Get ALL observers with their availability and current workload in ONE query
             trackPhase('fetchObservers');
-            const observersResult = await client.query(`
+            const observersResult = await pool.query(`
                 WITH observer_workload AS (
                     SELECT 
                         ObserverID,
                         COUNT(*) as assignment_count
-                    FROM ExamAssignment
+                FROM ExamAssignment 
                     WHERE Status = 'active'
                     GROUP BY ObserverID
                 ),
@@ -251,13 +252,13 @@ const AssignmentService = {
             trackPhase('fetchConflicts');
             const examDates = [...new Set(exams.map(e => e.examdate))];
             // Get the schedule ID from the first exam
-            const scheduleResult = await client.query(
+            const scheduleResult = await pool.query(
                 'SELECT ScheduleID FROM ExamSchedule WHERE ExamID = $1',
                 [examIds[0]]
             );
             const scheduleId = scheduleResult.rows[0]?.scheduleid;
             
-            const conflictsResult = await client.query(`
+            const conflictsResult = await pool.query(`
                 SELECT 
                     ea.ObserverID,
                     es.ExamDate,
@@ -456,7 +457,7 @@ const AssignmentService = {
                     INSERT INTO ExamAssignment (ExamID, ScheduleID, ObserverID, Role, Status)
                     VALUES ${assignmentInserts.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`).join(', ')}
                 `;
-                await client.query(insertQuery, assignmentInserts.flat());
+                await pool.query(insertQuery, assignmentInserts.flat());
                 performanceMetrics.databaseQueries++;
             }
             trackPhase('insertAssignments');
@@ -476,13 +477,13 @@ const AssignmentService = {
                         END
                     WHERE ExamID IN (${examUpdates.map(u => u.examId).join(', ')})
                 `;
-                await client.query(updateQuery);
+                await pool.query(updateQuery);
                 performanceMetrics.databaseQueries++;
             }
             trackPhase('updateExams');
 
             trackPhase('commit');
-            await client.query('COMMIT');
+            await pool.query('COMMIT');
             performanceMetrics.databaseQueries++;
             trackPhase('commit');
 
@@ -529,14 +530,44 @@ const AssignmentService = {
                     const filepath = path.join(reportsDir, filename);
                     console.log('[PERFORMANCE] Writing file:', filepath);
 
+                    // Prepare assignments for quality metrics
+                    const assignments = exams.map(exam => {
+                        const successfulAssignment = results.successful.find(s => s.examId === exam.examid);
+                        if (successfulAssignment) {
+                            // Find the actual observer IDs
+                            const headObserver = allObservers.find(o => o.name === successfulAssignment.head);
+                            const secretaryObserver = allObservers.find(o => o.name === successfulAssignment.secretary);
+                            return {
+                                examId: exam.examid,
+                                headId: headObserver?.observerid || null,
+                                secretaryId: secretaryObserver?.observerid || null
+                            };
+                        } else {
+                            return {
+                                examId: exam.examid,
+                                headId: null,
+                                secretaryId: null
+                            };
+                        }
+                    });
+                    
+                    // Calculate quality metrics
+                    const qualityMetrics = AssignmentQualityMetrics.calculateMetrics(
+                        assignments,
+                        exams,
+                        allObservers
+                    );
+                    
                     const report = {
                         timestamp: new Date().toISOString(),
+                        algorithm: 'random',
                         operationType: Array.isArray(examId) ? 'bulk' : 'single',
                         examCount: performanceMetrics.examCount,
                         observerCount: performanceMetrics.observerCount,
                         successfulAssignments: performanceMetrics.assignmentCount,
                         failedAssignments: performanceMetrics.failedCount,
                         performance: performanceStats,
+                        qualityMetrics: qualityMetrics,
                         detailedResults: results
                     };
 
@@ -547,11 +578,14 @@ const AssignmentService = {
                     const summaryFile = path.join(reportsDir, 'performance-summary.jsonl');
                     const summaryLine = JSON.stringify({
                         timestamp: report.timestamp,
+                        algorithm: 'random',
                         operationType: report.operationType,
                         examCount: report.examCount,
                         totalTimeMs: performanceStats.totalTimeMs,
                         examsPerSecond: performanceStats.examsPerSecond,
-                        successRate: ((performanceMetrics.assignmentCount / performanceMetrics.examCount) * 100).toFixed(1)
+                        successRate: ((performanceMetrics.assignmentCount / performanceMetrics.examCount) * 100).toFixed(1),
+                        qualityScore: qualityMetrics.overallScore.percentage.toFixed(1),
+                        qualityGrade: qualityMetrics.overallScore.grade
                     }) + '\n';
                     
                     await fs.appendFile(summaryFile, summaryLine);
@@ -591,7 +625,7 @@ const AssignmentService = {
             }
 
         } catch (error) {
-            await client.query('ROLLBACK');
+            await pool.query('ROLLBACK');
             console.error('[ASSIGNMENT SERVICE] Error in assignObserversToExam:', error);
             throw error;
         }
@@ -608,4 +642,4 @@ const AssignmentService = {
     }
 };
 
-module.exports = AssignmentService;
+module.exports = AssignmentService; 

@@ -2,7 +2,8 @@ import React from 'react';
 import { 
     FaRandom, 
     FaDna, 
-    FaTimes 
+    FaTimes,
+    FaChartLine 
 } from 'react-icons/fa';
 import './DistributionOptionsModal.scss';
 
@@ -28,6 +29,18 @@ const DistributionOptionsModal = ({ schedule, onClose, onSelectAlgorithm }) => {
                 'Considers observer expertise and availability',
                 'Minimizes conflicts and maximizes efficiency',
                 'Iteratively improves assignment quality'
+            ]
+        },
+        {
+            id: 'compare',
+            name: 'Compare & Apply Best',
+            description: 'Run both algorithms, compare results, and apply the best one',
+            icon: <FaChartLine />,
+            constraints: [
+                'Runs both Random and Genetic algorithms',
+                'Compares quality metrics and performance',
+                'Automatically applies the better result',
+                'Shows detailed comparison report'
             ]
         }
     ];

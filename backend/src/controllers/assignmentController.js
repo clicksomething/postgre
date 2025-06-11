@@ -4,6 +4,7 @@ const { client } = require('../../database/db');
 const jwt = require('jsonwebtoken');
 const fs = require('fs').promises;
 const path = require('path');
+const AlgorithmComparison = require('../utils/compareAlgorithms');
 
 const assignmentController = {
     // Get all exams with their assignment status
@@ -74,18 +75,18 @@ const assignmentController = {
 
             const { examId } = req.params;
 
-            const result = await AssignmentService.assignObserversToExam(examId);
-            res.json(result);
+                const result = await AssignmentService.assignObserversToExam(examId);
+                res.json(result);
         } catch (error) {
             console.error(`[ASSIGNMENT CONTROLLER] Error:`, {
                 message: error.message,
                 stack: error.stack,
                 name: error.name
-            });
-            res.status(500).json({ 
-                message: 'Failed to assign observers', 
+                });
+                res.status(500).json({ 
+                    message: 'Failed to assign observers', 
                 errorDetails: error.message 
-            });
+                });
         }
     },
 
@@ -418,6 +419,248 @@ const assignmentController = {
             console.error('Error in genetic algorithm assignment:', error);
             res.status(500).json({
                 message: "Failed to assign observers using genetic algorithm",
+                error: error.message
+            });
+        }
+    },
+
+    // Run both algorithms and compare
+    runAndCompareAlgorithms: async (req, res) => {
+        try {
+            const { scheduleId } = req.params;
+            
+            // Validate schedule exists
+            const scheduleCheck = await client.query(
+                'SELECT COUNT(*) as count FROM ExamSchedule WHERE ScheduleID = $1',
+                [scheduleId]
+            );
+            
+            if (scheduleCheck.rows[0].count === '0') {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Schedule not found'
+                });
+            }
+
+            // Get all exams for this schedule with full details
+            const examsResult = await client.query(`
+                SELECT 
+                    es.*,
+                    c.CourseName,
+                    r.RoomNum
+                FROM ExamSchedule es
+                JOIN Course c ON es.CourseID = c.CourseID
+                JOIN Room r ON es.RoomID = r.RoomID
+                WHERE es.ScheduleID = $1
+                ORDER BY es.ExamDate, es.StartTime
+            `, [scheduleId]);
+            
+            const exams = examsResult.rows;
+            const examIds = exams.map(row => row.examid);
+            
+            if (examIds.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No exams found in this schedule'
+                });
+            }
+
+            console.log(`Running comparison for ${examIds.length} exams in schedule ${scheduleId}`);
+
+            // Get all observers
+            const observersResult = await client.query(`
+                SELECT * FROM Observer 
+                ORDER BY 
+                    CASE WHEN Title ILIKE '%dr%' THEN 0 ELSE 1 END,
+                    ObserverID
+            `);
+            const observers = observersResult.rows;
+
+            // Step 1: Run Random Algorithm
+            console.log('Running Random Algorithm...');
+            const randomStartTime = Date.now();
+            
+            // Clear any existing assignments first
+            await client.query('BEGIN');
+            await client.query(
+                'DELETE FROM ExamAssignment WHERE ExamID = ANY($1)',
+                [examIds]
+            );
+            await client.query(
+                'UPDATE ExamSchedule SET ExamHead = NULL, ExamSecretary = NULL, Status = \'unassigned\' WHERE ExamID = ANY($1)',
+                [examIds]
+            );
+            await client.query('COMMIT');
+
+            // Run random assignment
+            const randomResult = await AssignmentService.assignObserversToExam(examIds);
+            const randomEndTime = Date.now();
+            
+            // Save random algorithm state
+            const randomAssignments = await client.query(
+                'SELECT * FROM ExamAssignment WHERE ExamID = ANY($1)',
+                [examIds]
+            );
+
+            // Step 2: Run Genetic Algorithm
+            console.log('Running Genetic Algorithm...');
+            const geneticStartTime = Date.now();
+            
+            // Clear assignments again - ensure complete cleanup
+            await client.query('BEGIN');
+            
+            // First, get all existing assignments to ensure we're deleting everything
+            const existingAssignments = await client.query(
+                'SELECT * FROM ExamAssignment WHERE ExamID = ANY($1)',
+                [examIds]
+            );
+            console.log(`Found ${existingAssignments.rows.length} existing assignments to delete`);
+            
+            // Delete with explicit confirmation
+            const deleteResult = await client.query(
+                'DELETE FROM ExamAssignment WHERE ExamID = ANY($1) RETURNING *',
+                [examIds]
+            );
+            console.log(`Deleted ${deleteResult.rows.length} assignments`);
+            
+            // Update exam schedule to ensure clean state
+            await client.query(
+                `UPDATE ExamSchedule 
+                 SET ExamHead = NULL, ExamSecretary = NULL, Status = 'unassigned' 
+                 WHERE ExamID = ANY($1)`,
+                [examIds]
+            );
+            
+            await client.query('COMMIT');
+            
+            // Add a small delay to ensure database consistency
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Verify cleanup
+            const verifyCleanup = await client.query(
+                'SELECT COUNT(*) as count FROM ExamAssignment WHERE ExamID = ANY($1)',
+                [examIds]
+            );
+            console.log(`Verification: ${verifyCleanup.rows[0].count} assignments remaining (should be 0)`);
+            
+            if (verifyCleanup.rows[0].count > 0) {
+                console.error('WARNING: Failed to completely clean up assignments. Attempting force cleanup...');
+                // Force cleanup with a more aggressive approach
+                await client.query('BEGIN');
+                await client.query(
+                    'DELETE FROM ExamAssignment WHERE ExamID = ANY($1)',
+                    [examIds]
+                );
+                await client.query('COMMIT');
+            }
+
+            // Run genetic algorithm
+            let geneticResult;
+            try {
+                const geneticService = new GeneticAssignmentService();
+                geneticResult = await geneticService.assignObserversWithGA(examIds);
+            } catch (geneticError) {
+                console.error('Error running genetic algorithm:', geneticError);
+                
+                // If it's a constraint violation, try one more time with complete cleanup
+                if (geneticError.code === '23505') {
+                    console.log('Constraint violation detected. Performing complete cleanup and retry...');
+                    
+                    // Complete cleanup
+                    await client.query('BEGIN');
+                    await client.query('DELETE FROM ExamAssignment WHERE ExamID = ANY($1)', [examIds]);
+                    await client.query(
+                        `UPDATE ExamSchedule 
+                         SET ExamHead = NULL, ExamSecretary = NULL, Status = 'unassigned' 
+                         WHERE ExamID = ANY($1)`,
+                        [examIds]
+                    );
+                    await client.query('COMMIT');
+                    
+                    // Wait a bit longer
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Retry
+                    const geneticService = new GeneticAssignmentService();
+                    geneticResult = await geneticService.assignObserversWithGA(examIds);
+                } else {
+                    throw geneticError;
+                }
+            }
+            const geneticEndTime = Date.now();
+
+            // Step 3: Compare the results
+            const comparison = await AlgorithmComparison.compareResults(
+                {
+                    algorithm: 'Random',
+                    result: randomResult,
+                    executionTime: randomEndTime - randomStartTime,
+                    timestamp: new Date(randomStartTime)
+                },
+                {
+                    algorithm: 'Genetic',
+                    result: geneticResult,
+                    executionTime: geneticEndTime - geneticStartTime,
+                    timestamp: new Date(geneticStartTime)
+                },
+                exams,
+                observers
+            );
+
+            // Step 4: Decide which result to keep (based on quality score)
+            const keepGenetic = comparison['Genetic Algorithm'].overallScore >= 
+                               comparison['Random Algorithm'].overallScore;
+
+            if (keepGenetic) {
+                console.log('Keeping Genetic Algorithm results (better quality)');
+                // Genetic results are already in the database
+            } else {
+                console.log('Reverting to Random Algorithm results (better quality)');
+                // Restore random assignments
+                await client.query('BEGIN');
+                await client.query(
+                    'DELETE FROM ExamAssignment WHERE ExamID = ANY($1)',
+                    [examIds]
+                );
+                
+                // Restore random assignments
+                for (const assignment of randomAssignments.rows) {
+                    await client.query(
+                        `INSERT INTO ExamAssignment (ExamID, ScheduleID, ObserverID, Role, Status, ExamDate)
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
+                        [assignment.examid, assignment.scheduleid, assignment.observerid, 
+                         assignment.role, assignment.status, assignment.examdate]
+                    );
+                }
+                
+                // Also restore the exam schedule status
+                await client.query(
+                    `UPDATE ExamSchedule es
+                     SET Status = 'assigned',
+                         ExamHead = ea_head.ObserverID,
+                         ExamSecretary = ea_sec.ObserverID
+                     FROM (SELECT ExamID, ObserverID FROM ExamAssignment WHERE Role = 'head' AND ExamID = ANY($1)) ea_head,
+                          (SELECT ExamID, ObserverID FROM ExamAssignment WHERE Role = 'secretary' AND ExamID = ANY($1)) ea_sec
+                     WHERE es.ExamID = ea_head.ExamID 
+                     AND es.ExamID = ea_sec.ExamID`,
+                    [examIds]
+                );
+                
+                await client.query('COMMIT');
+            }
+
+            res.json({
+                success: true,
+                comparison: comparison,
+                appliedAlgorithm: keepGenetic ? 'Genetic' : 'Random',
+                message: `Comparison complete. Applied ${keepGenetic ? 'Genetic' : 'Random'} algorithm results.`
+            });
+
+        } catch (error) {
+            console.error('Error in runAndCompareAlgorithms:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Error running algorithm comparison',
                 error: error.message
             });
         }
