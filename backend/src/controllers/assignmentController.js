@@ -6,6 +6,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const AlgorithmComparison = require('../utils/compareAlgorithms');
 
+
+
 const assignmentController = {
     // Get all exams with their assignment status
     getAllExams: async (req, res) => {
@@ -340,26 +342,26 @@ const assignmentController = {
 
             const { scheduleId } = req.params;
             const { 
-                populationSize = 50,
-                generations = 100,
-                mutationRate = 0.1,
-                crossoverRate = 0.7,
-                elitismRate = 0.1,
+                populationSize = 150,  // Optimized for large datasets
+                generations = 150,     // Optimized for large datasets
+                mutationRate = 0.15,   // Optimized for large datasets
+                crossoverRate = 0.7,   // Optimized for large datasets
+                elitismRate = 0.15,    // Optimized for large datasets
                 useDeterministicInit = true  // Default to true for better results
             } = req.body;
 
-            // Validate parameters
-            if (populationSize < 10 || populationSize > 500) {
-                return res.status(400).json({ message: 'Population size must be between 10 and 500' });
+            // Validate parameters - Updated ranges for large datasets
+            if (populationSize < 50 || populationSize > 500) {
+                return res.status(400).json({ message: 'Population size must be between 50 and 500 for large datasets' });
             }
-            if (generations < 10 || generations > 1000) {
-                return res.status(400).json({ message: 'Generations must be between 10 and 1000' });
+            if (generations < 50 || generations > 500) {
+                return res.status(400).json({ message: 'Generations must be between 50 and 500 for large datasets' });
             }
-            if (mutationRate < 0 || mutationRate > 1) {
-                return res.status(400).json({ message: 'Mutation rate must be between 0 and 1' });
+            if (mutationRate < 0.05 || mutationRate > 0.5) {
+                return res.status(400).json({ message: 'Mutation rate must be between 0.05 and 0.5 for large datasets' });
             }
-            if (crossoverRate < 0 || crossoverRate > 1) {
-                return res.status(400).json({ message: 'Crossover rate must be between 0 and 1' });
+            if (crossoverRate < 0.5 || crossoverRate > 0.9) {
+                return res.status(400).json({ message: 'Crossover rate must be between 0.5 and 0.9 for large datasets' });
             }
 
             // Get all exam IDs for this schedule
@@ -384,12 +386,14 @@ const assignmentController = {
                 useDeterministicInit
             });
 
-            // Run genetic algorithm
-            const result = await gaService.assignObserversWithGA(examIds);
 
-            // Format response
-            const response = {
-                message: "Genetic algorithm assignment complete",
+
+            // Start the genetic algorithm in a non-blocking way
+            console.log('[GA] Starting genetic algorithm in background...');
+            
+            // Send immediate response that the algorithm has started
+            res.json({
+                message: "Genetic algorithm started",
                 scheduleId: scheduleId,
                 algorithm: 'genetic',
                 parameters: {
@@ -399,22 +403,26 @@ const assignmentController = {
                     crossoverRate,
                     elitismRate
                 },
-                totalExams: result.successful.length + result.failed.length,
-                assignedExams: result.successful.length,
-                failedExams: result.failed.length,
-                fitness: result.performance.finalFitness,
-                convergenceGeneration: result.performance.convergenceGeneration,
-                assignments: result.successful.map(s => ({
-                    examId: s.examId,
-                    examName: s.examName,
-                    headObserver: s.head,
-                    secretary: s.secretary
-                })),
-                failed: result.failed,
-                performance: result.performance
-            };
+                status: 'running'
+            });
 
-            res.json(response);
+            // Run the genetic algorithm in the background
+            setImmediate(async () => {
+                try {
+                    console.log('[GA] Running genetic algorithm in background...');
+                    const result = await gaService.assignObserversWithGA(examIds);
+                    
+                    console.log('[GA] Genetic algorithm completed successfully');
+                    console.log('[GA] Results:', {
+                        totalExams: result.successful.length + result.failed.length,
+                        assignedExams: result.successful.length,
+                        failedExams: result.failed.length,
+                        fitness: result.performance.finalFitness
+                    });
+                } catch (error) {
+                    console.error('[GA] Error in background genetic algorithm:', error);
+                }
+            });
         } catch (error) {
             console.error('Error in genetic algorithm assignment:', error);
             res.status(500).json({

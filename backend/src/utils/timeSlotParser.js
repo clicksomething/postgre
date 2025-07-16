@@ -22,8 +22,8 @@ const parseArabicTimePhrase = (phrase) => {
 
 // Main time slot parsing function
 const parseTimeSlot = (timeValue, defaultStartTime = '08:00', defaultEndTime = '16:30') => {
-    // Check for full day availability (√)
-    if (timeValue === '√') {
+    // Check for full day availability (√, /, o)
+    if (timeValue === '√' || timeValue === '/' || timeValue === 'o') {
         return {
             isFullDay: true,
             startTime: defaultStartTime,

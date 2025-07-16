@@ -690,6 +690,7 @@ const uploadObservers = async (req, res) => {
     const summary = {
         observersCreated: 0,
         timeSlotsCreated: 0,
+        observersSkipped: 0,
         errors: [],
         parseErrors: [],
     };
@@ -714,10 +715,18 @@ const uploadObservers = async (req, res) => {
             // Arabic to English with "ال" prefix
             'الدكتور': 'Dr.',
             'الدكتورة': 'Dr.',
+            'الأستاذ الدكتور': 'Dr.',
+            'الأستاذة الدكتورة': 'Dr.',
 
             // Without "ال" prefix
             'دكتور': 'Dr.',
             'دكتورة': 'Dr.',
+            'استاذ دكتور': 'Dr.',
+            'أستاذة دكتورة': 'Dr.',
+
+            // Engineer titles
+            'مهندس': 'Eng.',
+            'مهندسة': 'Eng.',
 
             // Existing English options
             'Dr.': 'Dr.',
@@ -727,6 +736,7 @@ const uploadObservers = async (req, res) => {
             'Mr.': 'Mr.',
             'Mrs.': 'Mrs.',
             'Ms.': 'Ms.',
+            'Eng.': 'Eng.',
         };
 
         const scientificRankMappings = {
@@ -890,7 +900,10 @@ const uploadObservers = async (req, res) => {
 
                 if (existingObserver.rows.length > 0) {
                     const existing = existingObserver.rows[0];
-                    throw new Error(`Observer "${mappedRow.name}" already exists (ID: ${existing.observerid})`);
+                    console.log(`Skipping existing observer: "${mappedRow.name}" (ID: ${existing.observerid})`);
+                    summary.observersSkipped++;
+                    await client.query('ROLLBACK');
+                    continue; // Skip to next row
                 }
 
                 // Generate unique email
@@ -956,7 +969,7 @@ const uploadObservers = async (req, res) => {
                         // Normalize dayValue
                         const normalizedDayValue = typeof dayValue === 'string' ? dayValue.trim() : dayValue;
 
-                        if (normalizedDayValue === '√') {
+                        if (normalizedDayValue === '√' || normalizedDayValue === '/' || normalizedDayValue === 'o') {
                             // Mark full day availability
                             // Capitalize first letter of day name
                             const capitalizedDay = englishDay.charAt(0).toUpperCase() + englishDay.slice(1);
@@ -1021,22 +1034,41 @@ const uploadObservers = async (req, res) => {
                     message: rowError.message 
                 });
 
-                // Immediately throw to stop the entire upload process
-                throw new Error(`Upload failed at row ${rowNum}: ${rowError.message}`);
+                // Continue processing other rows instead of stopping
+                console.log(`Continuing with next row after error in row ${rowNum}`);
             }
         }
 
         console.log('--- UPLOAD SUMMARY ---');
         console.log('Observers Created:', summary.observersCreated);
+        console.log('Observers Skipped:', summary.observersSkipped);
         console.log('Time Slots Created:', summary.timeSlotsCreated);
         console.log('Errors:', summary.errors);
         console.log('Parse Errors:', summary.parseErrors);
 
-        // If we get here, the upload was completely successful
-        res.status(200).json({
-            message: 'Observers uploaded successfully',
-            summary: summary
-        });
+        // Determine response based on results
+        const hasErrors = summary.errors.length > 0 || summary.parseErrors.length > 0;
+        const hasSuccess = summary.observersCreated > 0;
+        
+        if (hasErrors && !hasSuccess) {
+            // All rows failed
+            res.status(400).json({
+                message: 'Upload completed with errors - no observers were created',
+                summary: summary
+            });
+        } else if (hasErrors && hasSuccess) {
+            // Partial success
+            res.status(207).json({
+                message: 'Upload completed with partial success - some observers were created, some failed',
+                summary: summary
+            });
+        } else {
+            // Complete success
+            res.status(200).json({
+                message: 'Observers uploaded successfully',
+                summary: summary
+            });
+        }
     } catch (err) {
         console.error('Fatal error during bulk observer upload:', err);
         

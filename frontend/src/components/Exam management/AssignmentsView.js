@@ -15,10 +15,14 @@ const AssignmentsView = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [schedulesPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+    
+
 
     useEffect(() => {
         fetchScheduleAssignments();
     }, []);
+
+
 
     const fetchScheduleAssignments = async () => {
         try {
@@ -71,15 +75,20 @@ const AssignmentsView = () => {
                 endpoint = `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`;
             } else if (algorithmId === 'genetic') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/assign-genetic`;
-                // Optimal genetic algorithm parameters for large problems
+                // Optimal genetic algorithm parameters for large problems (895 exams, 167 observers)
                 requestBody = {
-                    populationSize: 300,
-                    generations: 200,
-                    mutationRate: 0.2,
+                    populationSize: 50,
+                    generations: 50,
+                    mutationRate: 0.1,
                     crossoverRate: 0.8,
                     elitismRate: 0.1,
+                    convergenceThreshold: 0.001,
+                    maxGenerationsWithoutImprovement: 10,
+                    restartAfterGenerations: 15,
                     useDeterministicInit: true
                 };
+                
+
             } else if (algorithmId === 'compare') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/compare-algorithms`;
             }
@@ -293,6 +302,8 @@ const AssignmentsView = () => {
                 className="schedules-table-container"
                 tableClassName="schedules-table"
             />
+
+
 
             {showDistributionModal && selectedSchedule && (
                 <DistributionOptionsModal

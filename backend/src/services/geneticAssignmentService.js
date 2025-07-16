@@ -5,29 +5,29 @@ const AssignmentQualityMetrics = require('../utils/assignmentQualityMetrics');
 
 class GeneticAssignmentService {
     constructor(options = {}) {
-        // GA parameters
-        this.populationSize = options.populationSize || 300;  // Increased from 50
-        this.generations = options.generations || 200;  // Increased from 100
-        this.baseMutationRate = options.mutationRate || 0.4;  // Increased from 0.2
+        // GA parameters - Optimized for large datasets (895 exams, 167 observers)
+        this.populationSize = options.populationSize || 150;  // Reduced from 300 for better performance
+        this.generations = options.generations || 150;  // Reduced from 200
+        this.baseMutationRate = options.mutationRate || 0.15;  // Reduced from 0.4 for stability
         this.mutationRate = this.baseMutationRate;
-        this.crossoverRate = options.crossoverRate || 0.8;  // Increased from 0.7
-        this.elitismRate = options.elitismRate || 0.1;
-        this.tournamentSize = options.tournamentSize || 8;  // Increased from 5
+        this.crossoverRate = options.crossoverRate || 0.7;  // Reduced from 0.8
+        this.elitismRate = options.elitismRate || 0.15;  // Increased from 0.1 to preserve good solutions
+        this.tournamentSize = options.tournamentSize || 5;  // Reduced from 8 for faster selection
         
-        // Mutation rate adaptation parameters - Much more aggressive
-        this.minMutationRate = options.minMutationRate || 0.2;  // Increased from 0.1
-        this.maxMutationRate = options.maxMutationRate || 0.8;  // Increased from 0.4
+        // Mutation rate adaptation parameters - More conservative for large datasets
+        this.minMutationRate = options.minMutationRate || 0.05;  // Reduced from 0.2
+        this.maxMutationRate = options.maxMutationRate || 0.3;  // Reduced from 0.8
         
         // Add option for deterministic initialization
         this.useDeterministicInit = options.useDeterministicInit || true;  // Changed to true by default
         
-        // Early convergence parameters - Made more strict
-        this.convergenceGenerations = options.convergenceGenerations || 20;  // Increased from 10
-        this.convergenceThreshold = options.convergenceThreshold || 0.005;  // Increased from 0.001
+        // Early convergence parameters - More lenient for large problems
+        this.convergenceGenerations = options.convergenceGenerations || 30;  // Increased from 20
+        this.convergenceThreshold = options.convergenceThreshold || 0.01;  // Increased from 0.005
         
-        // Restart mechanism parameters
-        this.restartGenerations = options.restartGenerations || 50;  // Restart if stuck for 50 generations
-        this.restartThreshold = options.restartThreshold || 0.001;   // Very small improvement threshold
+        // Restart mechanism parameters - More conservative
+        this.restartGenerations = options.restartGenerations || 80;  // Increased from 50
+        this.restartThreshold = options.restartThreshold || 0.005;   // Increased from 0.001
         
         // Performance tracking - initialize without startTime
         this.performanceMetrics = {
@@ -37,7 +37,11 @@ class GeneticAssignmentService {
             finalAssignments: 0,
             mutationRates: [] // Track mutation rate changes
         };
+
+
     }
+
+
 
     /**
      * Calculate population diversity
@@ -94,23 +98,23 @@ class GeneticAssignmentService {
         const diversity = this.calculateDiversity(population);
         const progressRatio = currentGeneration / this.generations;
         
-        // Adjust mutation rate based on diversity and progress - Much more aggressive
+        // Adjust mutation rate based on diversity and progress - Conservative for large datasets
         let newRate;
         if (diversity < 0.1) {
-            // Very low diversity - extremely aggressive mutation
-            newRate = Math.min(this.mutationRate * 3.0, this.maxMutationRate);
+            // Very low diversity - moderate increase
+            newRate = Math.min(this.mutationRate * 1.5, this.maxMutationRate);
         } else if (diversity < 0.2) {
-            // Low diversity - very aggressive mutation
-            newRate = Math.min(this.mutationRate * 2.5, this.maxMutationRate);
+            // Low diversity - slight increase
+            newRate = Math.min(this.mutationRate * 1.3, this.maxMutationRate);
         } else if (diversity < 0.3) {
-            // Moderate-low diversity - aggressive mutation
-            newRate = Math.min(this.mutationRate * 2.0, this.maxMutationRate);
+            // Moderate-low diversity - keep current rate
+            newRate = this.mutationRate;
         } else if (diversity > 0.5) {
-            // High diversity - moderate mutation
-            newRate = Math.max(this.mutationRate * 0.8, this.minMutationRate);
+            // High diversity - reduce mutation
+            newRate = Math.max(this.mutationRate * 0.9, this.minMutationRate);
         } else {
-            // Moderate diversity - keep high mutation rate
-            newRate = Math.max(this.baseMutationRate * 1.5, this.minMutationRate);
+            // Moderate diversity - keep base rate
+            newRate = this.baseMutationRate;
         }
         
         // Ensure rate stays within bounds
@@ -136,6 +140,8 @@ class GeneticAssignmentService {
         // Start the timer when assignment actually begins
         this.performanceMetrics.startTime = Date.now();
         
+
+        
         try {
             await client.query('BEGIN');
             
@@ -156,8 +162,18 @@ class GeneticAssignmentService {
             // Reset mutation rate to base rate
             this.mutationRate = this.baseMutationRate;
             
-            // 3. Evolution loop
+            // 3. Evolution loop with timeout protection for large datasets
+            const startTime = Date.now();
+            const maxExecutionTime = 30 * 60 * 1000; // 30 minutes timeout
+            
             for (let gen = 0; gen < this.generations; gen++) {
+
+                
+                // Check for timeout
+                if (Date.now() - startTime > maxExecutionTime) {
+                    console.log(`[GA] Timeout reached after ${gen} generations. Stopping evolution.`);
+                    break;
+                }
                 try {
                 // Evaluate fitness
                 population = this.evaluateFitness(population, data);
@@ -187,7 +203,8 @@ class GeneticAssignmentService {
                         mutationRate: this.mutationRate
                 });
                     
-                    if (gen % 10 === 0) {
+                    // Reduce logging frequency for large datasets to improve performance
+                    if (gen % 25 === 0) { // Changed from 10 to 25
                         console.log(`[GA] Generation ${gen}: Best Fitness = ${bestIndividual.fitness.toFixed(3)}, Avg Fitness = ${(population.reduce((sum, ind) => sum + ind.fitness, 0) / population.length).toFixed(3)}`);
                     }
                 
@@ -1466,16 +1483,14 @@ class GeneticAssignmentService {
     mutate(individual, data) {
         const chromosome = [...individual.chromosome];
         
-        // Determine number of mutation points based on mutation rate
-        const mutationCount = Math.max(1, Math.floor(this.mutationRate * chromosome.length * 0.5));
+        // For large datasets, use fewer mutation points to preserve good solutions
+        const mutationCount = Math.max(1, Math.floor(this.mutationRate * chromosome.length * 0.2)); // Reduced from 0.5
         
-        // Create multiple mutation points
-        const mutationPoints = [];
-        for (let i = 0; i < mutationCount; i++) {
+        // Create mutation points - ensure they're unique
+        const mutationPoints = new Set();
+        while (mutationPoints.size < mutationCount) {
             const point = Math.floor(Math.random() * chromosome.length);
-            if (!mutationPoints.includes(point)) {
-                mutationPoints.push(point);
-            }
+            mutationPoints.add(point);
         }
         
         // Apply mutations to each point
@@ -1485,14 +1500,15 @@ class GeneticAssignmentService {
             // Get current assignment
             const currentGene = chromosome[mutationPoint];
             
-            // Build usage map excluding current assignment
+            // Build usage map excluding current assignment - more efficient for large datasets
             const observerUsage = new Map();
-            chromosome.forEach((gene, idx) => {
+            for (let idx = 0; idx < chromosome.length; idx++) {
+                const gene = chromosome[idx];
                 if (idx !== mutationPoint && gene.headId && gene.secretaryId) {
                     this.updateObserverUsage(observerUsage, gene.headId, data.exams[idx]);
                     this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[idx]);
                 }
-            });
+            }
             
             // Get available observers
             const availableObservers = this.getAvailableObserversForExam(
@@ -1503,13 +1519,32 @@ class GeneticAssignmentService {
             );
             
             if (availableObservers.length >= 2) {
-                // Randomly select new observers
-                const shuffled = this.shuffleArray([...availableObservers]);
-                chromosome[mutationPoint] = {
-                    examId: exam.examid,
-                    headId: shuffled[0].observerid,
-                    secretaryId: shuffled[1].observerid
-                };
+                // For large datasets, prefer keeping one observer if possible
+                if (currentGene.headId && availableObservers.some(o => o.observerid === currentGene.headId)) {
+                    // Keep head, change secretary
+                    const newSecretary = availableObservers.find(o => o.observerid !== currentGene.headId);
+                    chromosome[mutationPoint] = {
+                        examId: exam.examid,
+                        headId: currentGene.headId,
+                        secretaryId: newSecretary.observerid
+                    };
+                } else if (currentGene.secretaryId && availableObservers.some(o => o.observerid === currentGene.secretaryId)) {
+                    // Keep secretary, change head
+                    const newHead = availableObservers.find(o => o.observerid !== currentGene.secretaryId);
+                    chromosome[mutationPoint] = {
+                        examId: exam.examid,
+                        headId: newHead.observerid,
+                        secretaryId: currentGene.secretaryId
+                    };
+                } else {
+                    // Both observers need to change
+                    const shuffled = this.shuffleArray([...availableObservers]);
+                    chromosome[mutationPoint] = {
+                        examId: exam.examid,
+                        headId: shuffled[0].observerid,
+                        secretaryId: shuffled[1].observerid
+                    };
+                }
             } else {
                 // No valid assignment
                 chromosome[mutationPoint] = {

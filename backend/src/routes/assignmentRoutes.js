@@ -22,6 +22,8 @@ router.get('/performance/stats', assignmentController.getPerformanceStats);
 // Genetic algorithm assignment
 router.post('/schedules/:scheduleId/assign-genetic', assignmentController.assignObserversWithGA);
 
+
+
 // Run and compare algorithms
 router.post('/schedules/:scheduleId/compare-algorithms', assignmentController.runAndCompareAlgorithms);
 

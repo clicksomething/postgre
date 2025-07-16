@@ -106,35 +106,8 @@
         }
     }
 
-    .create-button {
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        background-color: #28a745;
-        color: #ffffff;
-        border: none;
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        z-index: 1000;
-
-        &:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-        }
-
-        svg {
-            font-size: 1.5rem;
-        }
-        display: none;
-    }
+    // Create button is now handled by DataTable action buttons
+    // Removed fixed positioned button to prevent overlap
 
     .empty-state {
         text-align: center;
