@@ -1,67 +1,140 @@
 .manage-exams-container {
-    padding: 20px;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    max-width: 1200px;
-    margin: 0 auto;
-    margin-top: var(--navbar-height); // Account for main navbar
+  padding: var(--space-6);
+  font-family: var(--font-family-sans);
+  background: var(--bg-primary);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
+  max-width: 1200px;
+  margin: 0 auto;
+  animation: slideUp 0.4s ease-out;
+
+  h1 {
+    color: var(--text-primary);
+    margin-bottom: var(--space-8);
+    text-align: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-3xl);
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .exam-actions {
+    display: flex;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+    padding: var(--space-6);
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-light);
+    flex-wrap: wrap;
+    justify-content: center;
+
+    .action-button {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-6);
+      border: none;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--text-secondary);
+      font-size: var(--font-size-base);
+      font-weight: var(--font-weight-medium);
+      cursor: pointer;
+      transition: all var(--transition-base);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-light);
+      min-width: 160px;
+      justify-content: center;
+
+      svg {
+        font-size: 1.2rem;
+        transition: all var(--transition-base);
+      }
+
+      &:hover {
+        background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+        color: var(--primary-700);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary-300);
+
+        svg {
+          transform: scale(1.1);
+        }
+      }
+
+      &.active {
+        background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+        color: white;
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary-500);
+
+        &:hover {
+          background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
+          transform: translateY(-1px);
+        }
+
+        svg {
+          color: white;
+        }
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+  }
+
+  .exam-content {
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-light);
+    min-height: 400px;
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .manage-exams-container {
+    padding: var(--space-4);
 
     h1 {
-        color: #343a40;
-        margin-bottom: 25px;
-        text-align: center;
-        font-weight: 600;
-        font-size: 2rem;
+      font-size: var(--font-size-2xl);
+      margin-bottom: var(--space-6);
     }
 
     .exam-actions {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 2rem;
-        padding: 1rem;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      flex-direction: column;
+      gap: var(--space-3);
+      padding: var(--space-4);
 
-        .action-button {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            background-color: #f8f9fa;
-            color: #495057;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-
-            svg {
-                font-size: 1.1rem;
-            }
-
-            &:hover {
-                background-color: #e9ecef;
-                transform: translateY(-1px);
-            }
-
-            &.active {
-                background-color: #4c51bf;
-                color: white;
-
-                &:hover {
-                    background-color: #434190;
-                }
-            }
-        }
+      .action-button {
+        min-width: auto;
+        width: 100%;
+      }
     }
 
     .exam-content {
-        background-color: #fff;
-        border-radius: 8px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      padding: var(--space-4);
     }
+  }
+}
+
+// Animation
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 } 

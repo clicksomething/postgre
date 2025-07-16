@@ -1,0 +1,88 @@
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    
+    .spinner-icon {
+        animation: spin 1s linear infinite;
+        margin-bottom: 1rem;
+        color: #4c51bf;
+    }
+    
+    .loading-message {
+        color: #6b7280;
+        font-size: 1rem;
+        font-weight: 500;
+    }
+    
+    // Size variants
+    &.small {
+        padding: 1rem;
+        
+        .spinner-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .loading-message {
+            font-size: 0.875rem;
+        }
+    }
+    
+    &.medium {
+        padding: 2rem;
+        
+        .spinner-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-message {
+            font-size: 1rem;
+        }
+    }
+    
+    &.large {
+        padding: 3rem;
+        
+        .spinner-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .loading-message {
+            font-size: 1.125rem;
+        }
+    }
+    
+    // Full screen variant
+    &.fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.9);
+        z-index: 9999;
+        
+        .spinner-icon {
+            font-size: 3rem;
+        }
+        
+        .loading-message {
+            font-size: 1.25rem;
+        }
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+} 

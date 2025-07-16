@@ -4,34 +4,12 @@ import SuccessMessage from '../SuccessMessage';
 import EditUserModal from './EditUserModal';
 import DeleteUserModal from './DeleteUserModal';
 import CreateUserModal from './CreateUserModal';
-import { FaSearch, FaPlus, FaEdit, FaTrash, FaSpinner, FaUser } from 'react-icons/fa';
-import { Tooltip } from 'react-tooltip';
-import 'react-tooltip/dist/react-tooltip.css';
+import { FaPlus, FaEdit, FaTrash, FaUser } from 'react-icons/fa';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import DataTable from '../common/DataTable';
 
-const ClientOnlyTooltip = () => {
-  const [mounted, setMounted] = useState(false);
-  
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
-  if (!mounted) return null;
-
-  return (
-    <Tooltip
-      id="main-tooltip"
-      style={{
-        zIndex: 9999,
-        backgroundColor: '#2d3748',
-        color: '#fff',
-        borderRadius: '6px',
-        fontSize: '14px'
-      }}
-    />
-  );
-};
 
 const ManageUsers = () => {
     const [users, setUsers] = useState([]);
@@ -204,143 +182,95 @@ const ManageUsers = () => {
         setSortConfig({ key, direction });
     };
 
-    // Pagination
-    const indexOfLastUser = currentPage * usersPerPage;
-    const indexOfFirstUser = indexOfLastUser - usersPerPage;
-    const currentUsers = sortedUsers.slice(indexOfFirstUser, indexOfLastUser);
-
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-    const handleDeleteUser = async (userId) => {
-        try {
-            await axios.delete(`/api/users/${userId}`);
-            fetchUsers(); // Refresh the list
-        } catch (error) {
-            console.error('Error deleting user:', error);
-        }
-    };
 
-    if (loading) {
-        return (
-            <div className="loading-spinner">
-                <FaSpinner className="spinner-icon" />
-                <span>Loading users...</span>
-            </div>
-        );
-    }
 
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
+    const columns = [
+      {
+        key: 'name',
+        label: 'Name',
+        sortable: true
+      },
+      {
+        key: 'email',
+        label: 'Email',
+        sortable: true
+      },
+      {
+        key: 'phonenum',
+        label: 'Phone',
+        sortable: true
+      },
+      {
+        key: 'isAdmin',
+        label: 'Role',
+        sortable: true,
+        render: (user) => (
+          <span className={`status-indicator ${user.isAdmin ? "admin" : "user"}`}>
+            {getRoleDisplayName(user)}
+          </span>
+        )
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        sortable: false,
+        render: (user) => (
+          <>
+            <button
+              className="edit-button"
+              onClick={() => handleEditClick(user)}
+              data-tooltip-id="main-tooltip"
+              data-tooltip-content="Edit user"
+            >
+              <FaEdit /> Edit
+            </button>
+            <button
+              className="delete-button"
+              onClick={() => handleDeleteClick(user)}
+              data-tooltip-id="main-tooltip"
+              data-tooltip-content="Delete user"
+            >
+              <FaTrash /> Delete
+            </button>
+          </>
+        )
+      }
+    ];
+
+    const actionButtons = [
+      {
+        icon: <FaPlus />,
+        text: '',
+        className: 'create-button',
+        tooltip: 'Create new user',
+        onClick: handleCreateClick
+      }
+    ];
 
     return (
       <div className="manage-users-container">
-        <ClientOnlyTooltip />
-        <h2>Manage Users</h2>
-
-        <div className="search-bar">
-          <FaSearch className="search-icon" />
-          <input
-            type="text"
-            placeholder="Search by name or email..."
-            value={searchTerm}
-            onChange={handleSearch}
-          />
-          {searchTerm && (
-            <button className="clear-search" onClick={() => setSearchTerm("")}>
-              &times;
-            </button>
-          )}
-        </div>
-
-        {currentUsers.length === 0 ? (
-          <div className="empty-state">
-            <FaUser className="empty-icon" />
-            <p>No users found.</p>
-          </div>
-        ) : (
-          <div className="user-table-container">
-            <table className="user-table">
-              <thead>
-                <tr>
-                  <th onClick={() => requestSort("name")}>
-                    Name{" "}
-                    {sortConfig.key === "name" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("email")}>
-                    Email{" "}
-                    {sortConfig.key === "email" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("phonenum")}>
-                    Phone{" "}
-                    {sortConfig.key === "phonenum" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th onClick={() => requestSort("isAdmin")}>
-                    Role{" "}
-                    {sortConfig.key === "isAdmin" &&
-                      (sortConfig.direction === "ascending" ? "▲" : "▼")}
-                  </th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
-                    <td>{user.phonenum}</td>
-                    <td>
-                      <span
-                        className={`status-indicator ${
-                          user.isAdmin ? "admin" : "user"
-                        }`}
-                      >
-                        {getRoleDisplayName(user)}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="edit-button"
-                        onClick={() => handleEditClick(user)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Edit user"
-                      >
-                        <FaEdit /> Edit
-                      </button>
-                      <button
-                        className="delete-button"
-                        onClick={() => handleDeleteClick(user)}
-                        data-tooltip-id="main-tooltip"
-                        data-tooltip-content="Delete user"
-                      >
-                        <FaTrash /> Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <Pagination
-          usersPerPage={usersPerPage}
-          totalUsers={sortedUsers.length}
-          paginate={paginate}
+        <DataTable
+          title="Manage Users"
+          data={sortedUsers}
+          columns={columns}
+          loading={loading}
+          error={error}
+          searchTerm={searchTerm}
+          onSearchChange={handleSearch}
+          onClearSearch={() => setSearchTerm("")}
+          searchPlaceholder="Search by name or email..."
+          emptyStateMessage="No users found."
+          emptyStateIcon={FaUser}
+          itemsPerPage={usersPerPage}
           currentPage={currentPage}
+          onPageChange={paginate}
+          sortConfig={sortConfig}
+          onSort={requestSort}
+          actionButtons={actionButtons}
+          containerClassName="manage-users-container"
         />
-
-        <button
-          className="create-button"
-          onClick={handleCreateClick}
-          data-tooltip-id="main-tooltip"
-          data-tooltip-content="Create new user"
-        >
-          <FaPlus />
-        </button>
 
         {editingUser && (
           <EditUserModal
@@ -371,28 +301,6 @@ const ManageUsers = () => {
           onClose={handleCloseMessage}
         />
       </div>
-    );
-};
-
-const Pagination = ({ usersPerPage, totalUsers, paginate, currentPage }) => {
-    const pageNumbers = [];
-
-    for (let i = 1; i <= Math.ceil(totalUsers / usersPerPage); i++) {
-        pageNumbers.push(i);
-    }
-
-    return (
-        <nav>
-            <ul className="pagination">
-                {pageNumbers.map(number => (
-                    <li key={number} className={`page-item ${currentPage === number ? 'active' : ''}`}>
-                        <button onClick={() => paginate(number)} className="page-link">
-                            {number}
-                        </button>
-                    </li>
-                ))}
-            </ul>
-        </nav>
     );
 };
 

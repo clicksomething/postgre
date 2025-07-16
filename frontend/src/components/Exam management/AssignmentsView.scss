@@ -1,135 +1,135 @@
 .assignments-view {
-    padding: 20px;
-    background-color: #f4f4f4;
+  // Remove container styling since this is rendered inside ManageExams container
+  // padding, background, border-radius, box-shadow, and border removed
 
-    .search-section {
-        margin-bottom: 20px;
+  // Remove conflicting search bar styles since DataTable handles this
+  // .search-section styles removed - handled by DataTable component
 
-        .search-bar {
-            display: flex;
-            align-items: center;
-            background-color: white;
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  .schedules-table-container {
+    // Remove container styling - no background, border, shadow, or border-radius
+    overflow-x: auto;
 
-            .search-icon {
-                color: #888;
-                margin-right: 10px;
-            }
+    .schedules-table {
+      width: 100%;
+      border-collapse: collapse;
 
-            input {
-                flex-grow: 1;
-                border: none;
-                outline: none;
-                font-size: 16px;
-            }
-
-            .clear-search {
-                background: none;
-                border: none;
-                color: #888;
-                cursor: pointer;
-            }
+      thead {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        
+        th {
+          padding: var(--space-4) var(--space-6);
+          text-align: left;
+          border-bottom: 2px solid var(--border-light);
+          color: var(--text-primary);
+          font-weight: var(--font-weight-semibold);
+          font-size: var(--font-size-sm);
         }
+      }
+
+      tbody {
+        tr {
+          transition: all var(--transition-base);
+          border-bottom: 1px solid var(--border-light);
+
+          &:hover {
+            background: rgba(99, 102, 241, 0.02);
+            transform: translateX(2px);
+          }
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          td {
+            padding: var(--space-4) var(--space-6);
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+          }
+        }
+      }
+    }
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: var(--shadow-sm);
+
+    svg {
+      font-size: 0.8rem;
     }
 
-    .schedules-table-container {
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        overflow-x: auto;
-
-        .schedules-table {
-            width: 100%;
-            border-collapse: collapse;
-
-            thead {
-                background-color: #f8f9fa;
-                
-                th {
-                    padding: 12px 15px;
-                    text-align: left;
-                    border-bottom: 2px solid #e0e0e0;
-                    color: #333;
-                    font-weight: 600;
-                }
-            }
-
-            tbody {
-                tr {
-                    transition: background-color 0.3s ease;
-
-                    &:hover {
-                        background-color: #f1f1f1;
-                    }
-
-                    td {
-                        padding: 12px 15px;
-                        border-bottom: 1px solid #e0e0e0;
-                    }
-                }
-            }
-        }
+    &.assigned {
+      background: var(--success-100);
+      color: var(--success-700);
     }
 
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 5px 10px;
-        border-radius: 4px;
-        font-weight: 600;
-
-        svg {
-            margin-right: 5px;
-        }
-
-        &.assigned {
-            background-color: #e6f3e6;
-            color: #2c7f2c;
-        }
-
-        &.partially-assigned {
-            background-color: #fff4e6;
-            color: #f39c12;
-        }
-
-        &.unassigned {
-            background-color: #f4e6e6;
-            color: #c0392b;
-        }
+    &.partially-assigned {
+      background: var(--warning-100);
+      color: var(--warning-700);
     }
 
-    .distribute-btn {
-        display: inline-flex;
-        align-items: center;
-        background-color: #3498db;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 6px 12px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
+    &.unassigned {
+      background: var(--error-100);
+      color: var(--error-700);
+    }
+  }
 
-        svg {
-            margin-right: 5px;
-        }
+  .distribute-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: var(--shadow-sm);
 
-        &:hover {
-            background-color: #2980b9;
-        }
+    svg {
+      font-size: 0.875rem;
     }
 
-    .loading, .error {
-        text-align: center;
-        padding: 20px;
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    &:hover {
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
     }
 
-    .error {
-        color: #c0392b;
-        background-color: #f4e6e6;
+    &:active {
+      transform: translateY(0);
     }
+  }
+
+  .loading, .error {
+    text-align: center;
+    padding: var(--space-8);
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-light);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .loading {
+    color: var(--primary-500);
+  }
+
+  .error {
+    color: var(--error-600);
+    background: var(--error-50);
+    border-color: var(--error-200);
+  }
 } 

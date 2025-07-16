@@ -1,236 +1,231 @@
+@use '../../styles/index' as *;
+
 .manage-users-container {
-  padding-top: calc(var(--navbar-height) + 20px);
-  padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f8f9fa;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  padding: var(--space-4);
+  font-family: var(--font-family-sans);
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
   max-width: 1200px;
   margin: 0 auto;
+  animation: slideUp 0.4s ease-out;
 
   h2 {
-    color: #343a40;
-    margin-bottom: 25px;
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
     text-align: center;
-    font-weight: 600;
-    font-size: 2rem;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-2xl);
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
-  .search-bar {
-    position: relative;
-    margin-bottom: 30px;
-
-    .search-icon {
-      position: absolute;
-      left: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #6c757d;
-    }
-    .react-tooltip {
-      z-index: 9999 !important;
-      pointer-events: none;
-    }
-    
-    .user-table th {
-      user-select: none;
-    }
-    // In ManageUsers.scss
-.react-tooltip {
-  animation: tooltip-fade 0.3s forwards;
-  pointer-events: none !important;
-}
-
-@keyframes tooltip-fade {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-    input {
-      width: 100%;
-      padding: 12px 12px 12px 40px;
-      border: 1px solid #ced4da;
-      border-radius: 8px;
-      box-sizing: border-box;
-      font-size: 1rem;
-      transition: border-color 0.3s ease;
-
-      &:focus {
-        border-color: #80bdff;
-        outline: none;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-      }
-    }
-
-    .clear-search {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1.2rem;
-      color: #6c757d;
-
-      &:hover {
-        color: #343a40;
-      }
-    }
-  }
-
-  .user-table-container {
-    overflow-x: auto;
-    margin-bottom: 2rem;
-  }
-
-  .user-table {
-    width: 100%;
-    border-collapse: collapse;
-
+  // Enhanced table styling for better column spacing
+  .data-table {
     th, td {
-      border: 1px solid #dee2e6;
-      padding: 12px;
-      text-align: left;
+      padding: var(--space-4) var(--space-6);
+      border-right: 1px solid var(--border-light);
+      
+      &:last-child {
+        border-right: none;
+      }
     }
 
     th {
-      background-color: #39A2DB;
-      color: #fff;
-      font-weight: bold;
-      cursor: pointer;
-      user-select: none;
-      transition: background-color 0.3s ease;
-
-      &:hover {
-        background-color: #2E86AB;
-      }
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      border-bottom: 2px solid var(--border-light);
+      font-weight: var(--font-weight-semibold);
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
-    tr {
-      transition: all 0.2s ease;
+    tbody tr {
+      border-bottom: 1px solid var(--border-light);
       
       &:hover {
-        background-color: #f1f1f1;
-        transform: scale(1.002);
+        background: rgba(99, 102, 241, 0.02);
+        transform: translateX(2px);
+      }
+
+      &:last-child {
+        border-bottom: none;
       }
     }
 
-    .edit-button, .delete-button {
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-right: 8px;
+    td {
+      color: var(--text-secondary);
+      font-size: var(--font-size-sm);
+      vertical-align: middle;
+    }
+  }
 
-      svg {
-        font-size: 14px;
-      }
+  // Status indicators with modern styling
+  .status-indicator {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    transition: all var(--transition-base);
+
+    &.admin {
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      color: var(--text-inverse);
+      box-shadow: var(--shadow-sm);
 
       &:hover {
         transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
       }
     }
 
-    .edit-button {
-      background-color: #007bff;
-      color: #ffffff;
+    &.user {
+      background: linear-gradient(135deg, var(--success-500), var(--success-600));
+      color: var(--text-inverse);
+      box-shadow: var(--shadow-sm);
 
       &:hover {
-        background-color: #0056b3;
-      }
-    }
-
-    .delete-button {
-      background-color: #dc3545;
-      color: #ffffff;
-
-      &:hover {
-        background-color: #c82333;
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
       }
     }
   }
 
-  .status-indicator {
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    display: inline-block;
-    transition: all 0.2s ease;
+  // Action buttons with modern styling
+  .edit-button, .delete-button {
+    padding: var(--space-1) var(--space-3);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    transition: all var(--transition-base);
+    margin-right: var(--space-1);
 
-    &.admin {
-      background-color: #4c51bf;
-      color: white;
-    }
-
-    &.user {
-      background-color: #48bb78;
-      color: white;
+    svg {
+      font-size: 0.875rem;
+      transition: transform var(--transition-base);
     }
 
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--shadow-sm);
+
+      svg {
+        transform: scale(1.1);
+      }
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 
+  .edit-button {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover {
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    }
+  }
+
+  .delete-button {
+    background: linear-gradient(135deg, var(--error-500), var(--error-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover {
+      background: linear-gradient(135deg, var(--error-600), var(--error-700));
+    }
+  }
+
+  // Create button with floating action button design
   .create-button {
     position: fixed;
-    bottom: 30px;
-    right: 30px;
-    background-color: #007bff;
-    color: white;
+    bottom: var(--space-6);
+    right: var(--space-6);
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: var(--text-inverse);
     border: none;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
+    border-radius: var(--radius-full);
+    width: 56px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    transition: background-color 0.3s ease;
+    box-shadow: var(--shadow-lg);
+    transition: all var(--transition-base);
+    z-index: var(--z-fixed);
 
     &:hover {
-      background-color: #0056b3;
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: var(--shadow-xl);
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    }
+
+    &:active {
+      transform: translateY(-1px) scale(1.02);
     }
 
     svg {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
+      transition: transform var(--transition-base);
+    }
+
+    &:hover svg {
+      transform: rotate(90deg);
     }
   }
 
+  // Empty state styling
   .empty-state {
     text-align: center;
-    padding: 40px;
-    color: #6c757d;
+    padding: var(--space-8);
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    margin: var(--space-4) 0;
 
     .empty-icon {
       font-size: 3rem;
-      margin-bottom: 10px;
+      margin-bottom: var(--space-3);
+      color: var(--text-muted);
+      opacity: 0.5;
     }
 
     p {
-      font-size: 1.2rem;
+      font-size: var(--font-size-base);
+      color: var(--text-secondary);
+      margin: 0;
     }
   }
 
+  // Loading spinner with modern styling
   .loading-spinner {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
-    color: #007bff;
+    font-size: var(--font-size-base);
+    color: var(--primary-500);
+    padding: var(--space-6);
 
     .spinner-icon {
-      margin-right: 10px;
+      margin-right: var(--space-2);
       animation: spin 1s linear infinite;
+      color: var(--primary-500);
     }
   }
 
@@ -243,48 +238,185 @@
     }
   }
 
+  // Pagination with modern styling
   .pagination {
     display: flex;
     justify-content: center;
     list-style: none;
     padding: 0;
-    margin-top: 20px;
+    margin-top: var(--space-4);
+    gap: var(--space-1);
 
     .page-item {
-      margin: 0 5px;
-
       .page-link {
-        padding: 8px 12px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        color: #007bff;
-        background-color: #fff;
+        padding: var(--space-1) var(--space-3);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-md);
+        color: var(--text-secondary);
+        background: var(--bg-primary);
         cursor: pointer;
+        transition: all var(--transition-base);
+        font-weight: var(--font-weight-medium);
+        min-width: 36px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--font-size-sm);
 
         &:hover {
-          background-color: #e9ecef;
+          background: var(--bg-secondary);
+          border-color: var(--primary-300);
+          color: var(--primary-600);
+          transform: translateY(-1px);
+          box-shadow: var(--shadow-sm);
         }
       }
 
       &.active .page-link {
-        background-color: #007bff;
-        color: #fff;
-        border-color: #007bff;
+        background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+        color: var(--text-inverse);
+        border-color: var(--primary-500);
+        box-shadow: var(--shadow-sm);
+      }
+
+      &.disabled .page-link {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+    }
+  }
+
+  // Error message styling
+  .error-message {
+    background: linear-gradient(135deg, var(--error-50), var(--error-100));
+    border: 1px solid var(--error-200);
+    color: var(--error-700);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    margin: var(--space-3) 0;
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+  }
+
+  // Success message styling
+  .success-message {
+    background: linear-gradient(135deg, var(--success-50), var(--success-100));
+    border: 1px solid var(--success-200);
+    color: var(--success-700);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    margin: var(--space-3) 0;
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+  }
+
+  // Tooltip styling
+  .react-tooltip {
+    z-index: var(--z-tooltip) !important;
+    pointer-events: none !important;
+    background: var(--secondary-800) !important;
+    color: var(--text-inverse) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: var(--space-2) var(--space-3) !important;
+    font-size: var(--font-size-sm) !important;
+    font-weight: var(--font-weight-medium) !important;
+    box-shadow: var(--shadow-lg) !important;
+    backdrop-filter: blur(10px) !important;
+    animation: tooltip-fade 0.3s ease-out !important;
+  }
+
+  @keyframes tooltip-fade {
+    from { 
+      opacity: 0; 
+      transform: translateY(-5px) scale(0.95); 
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0) scale(1); 
+    }
+  }
+
+  // Animation for container
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .manage-users-container {
+    padding: var(--space-3);
+    margin: var(--space-2);
+    border-radius: var(--radius-lg);
+
+    h2 {
+      font-size: var(--font-size-xl);
+      margin-bottom: var(--space-3);
+    }
+
+    .data-table {
+      th, td {
+        padding: var(--space-2) var(--space-3);
+      }
+    }
+
+    .create-button {
+      bottom: var(--space-4);
+      right: var(--space-4);
+      width: 48px;
+      height: 48px;
+
+      svg {
+        font-size: 1rem;
+      }
+    }
+
+    .pagination {
+      flex-wrap: wrap;
+      gap: var(--space-1);
+
+      .page-item .page-link {
+        padding: var(--space-1) var(--space-2);
+        min-width: 32px;
+        font-size: var(--font-size-xs);
       }
     }
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .manage-users-container {
-    padding: 10px;
-  }
-}
-.react-tooltip {
-  pointer-events: none !important;
-  transition: opacity 0.3s ease;
-  
-  &__show {
-    opacity: 1 !important;
+    padding: var(--space-2);
+
+    .data-table {
+      th, td {
+        padding: var(--space-2);
+        font-size: var(--font-size-xs);
+      }
+    }
+
+    .edit-button, .delete-button {
+      padding: var(--space-1) var(--space-2);
+      font-size: var(--font-size-xs);
+      margin-right: var(--space-1);
+
+      svg {
+        font-size: 0.75rem;
+      }
+    }
+
+    .status-indicator {
+      padding: var(--space-1) var(--space-2);
+      font-size: var(--font-size-xs);
+    }
   }
 }

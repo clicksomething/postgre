@@ -8,23 +8,23 @@
         max-width: 500px;
     }
 
-    .close-button {
-        @include modal-close-button;
+    .modal-header {
+        @include modal-header;
     }
 
-    h2 {
-        @include modal-title;
+    .modal-body {
+        @include modal-body;
+    }
+
+    .modal-footer {
+        @include modal-footer;
     }
 
     .form-group {
-        @include modal-form-group;
-
-        input[type="time"] {
-            @extend input;
-        }
+        @include form-group;
     }
 
-    .buttons {
-        @include modal-buttons;
+    .error-message {
+        @include error-message;
     }
 }

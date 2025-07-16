@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FaSearch, FaTimes, FaCheck, FaExclamationTriangle, FaClipboardList } from 'react-icons/fa';
+import { FaTimes, FaCheck, FaExclamationTriangle, FaClipboardList } from 'react-icons/fa';
 import axios from 'axios';
 import DistributionOptionsModal from './Modals/DistributionOptionsModal';
 import './AssignmentsView.scss';
+import DataTable from '../common/DataTable';
 
 const AssignmentsView = () => {
     const [schedules, setSchedules] = useState([]);
@@ -11,6 +12,9 @@ const AssignmentsView = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSchedule, setSelectedSchedule] = useState(null);
     const [showDistributionModal, setShowDistributionModal] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [schedulesPerPage] = useState(10);
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
     useEffect(() => {
         fetchScheduleAssignments();
@@ -67,13 +71,14 @@ const AssignmentsView = () => {
                 endpoint = `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`;
             } else if (algorithmId === 'genetic') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/assign-genetic`;
-                // You can customize genetic algorithm parameters here if needed
+                // Optimal genetic algorithm parameters for large problems
                 requestBody = {
-                    populationSize: 50,
-                    generations: 30,
-                    mutationRate: 0.1,
-                    crossoverRate: 0.7,
-                    elitismRate: 0.1
+                    populationSize: 300,
+                    generations: 200,
+                    mutationRate: 0.2,
+                    crossoverRate: 0.8,
+                    elitismRate: 0.1,
+                    useDeterministicInit: true
                 };
             } else if (algorithmId === 'compare') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/compare-algorithms`;
@@ -151,11 +156,36 @@ const AssignmentsView = () => {
         setShowDistributionModal(false);
     };
 
-    const filteredSchedules = schedules.filter(schedule => 
-        schedule.academicYear.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schedule.semester.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schedule.examType.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const getFilteredAndSortedSchedules = () => {
+        let filteredSchedules = schedules.filter(schedule => 
+            schedule.academicYear.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            schedule.semester.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            schedule.examType.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        // Apply sorting
+        if (sortConfig.key !== null) {
+            filteredSchedules.sort((a, b) => {
+                let aValue = a[sortConfig.key];
+                let bValue = b[sortConfig.key];
+
+                if (sortConfig.key === 'uploadDate') {
+                    aValue = new Date(a.uploadDate);
+                    bValue = new Date(b.uploadDate);
+                }
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
+        return filteredSchedules;
+    };
 
     const getStatusBadge = (status) => {
         switch(status) {
@@ -170,65 +200,99 @@ const AssignmentsView = () => {
         }
     };
 
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+        setCurrentPage(1); // Reset to first page when sorting
+    };
+
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+    const columns = [
+        {
+            key: 'academicYear',
+            label: 'Academic Year',
+            sortable: true
+        },
+        {
+            key: 'semester',
+            label: 'Semester',
+            sortable: true
+        },
+        {
+            key: 'examType',
+            label: 'Exam Type',
+            sortable: true
+        },
+        {
+            key: 'uploadDate',
+            label: 'Upload Date',
+            sortable: true,
+            render: (schedule) => new Date(schedule.uploadDate).toLocaleDateString()
+        },
+        {
+            key: 'totalExams',
+            label: 'Total Exams',
+            sortable: true
+        },
+        {
+            key: 'assignedExams',
+            label: 'Assigned Exams',
+            sortable: true,
+            render: (schedule) => `${schedule.assignedExams} / ${schedule.totalExams}`
+        },
+        {
+            key: 'assignmentStatus',
+            label: 'Status',
+            sortable: true,
+            render: (schedule) => getStatusBadge(schedule.assignmentStatus)
+        },
+        {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (schedule) => (
+                <span style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
+                    <button 
+                        className="distribute-btn"
+                        style={{ display: 'inline-block' }}
+                        onClick={() => handleDistributeObservers(schedule)}
+                    >
+                        <FaClipboardList /> Distribute
+                    </button>
+                </span>
+            )
+        }
+    ];
+
     if (loading) return <div className="loading">Loading schedule assignments...</div>;
     if (error) return <div className="error">{error}</div>;
 
     return (
         <div className="assignments-view">
-            <div className="search-section">
-                <div className="search-bar">
-                    <FaSearch className="search-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search schedules..."
-                        value={searchTerm}
-                        onChange={handleSearch}
-                    />
-                    {searchTerm && (
-                        <button className="clear-search" onClick={() => setSearchTerm('')}>
-                            <FaTimes />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div className="schedules-table-container">
-                <table className="schedules-table">
-                    <thead>
-                        <tr>
-                            <th>Academic Year</th>
-                            <th>Semester</th>
-                            <th>Exam Type</th>
-                            <th>Upload Date</th>
-                            <th>Total Exams</th>
-                            <th>Assigned Exams</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredSchedules.map((schedule) => (
-                            <tr key={schedule.scheduleId}>
-                                <td>{schedule.academicYear}</td>
-                                <td>{schedule.semester}</td>
-                                <td>{schedule.examType}</td>
-                                <td>{new Date(schedule.uploadDate).toLocaleDateString()}</td>
-                                <td>{schedule.totalExams}</td>
-                                <td>{schedule.assignedExams} / {schedule.totalExams}</td>
-                                <td>{getStatusBadge(schedule.assignmentStatus)}</td>
-                                <td>
-                                    <button 
-                                        className="distribute-btn"
-                                        onClick={() => handleDistributeObservers(schedule)}
-                                    >
-                                        <FaClipboardList /> Distribute
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+            <DataTable
+                title="Manage Assignments"
+                data={getFilteredAndSortedSchedules()}
+                columns={columns}
+                loading={loading}
+                error={error}
+                searchTerm={searchTerm}
+                onSearchChange={handleSearch}
+                onClearSearch={() => setSearchTerm('')}
+                searchPlaceholder="Search schedules..."
+                emptyStateMessage="No schedules found."
+                itemsPerPage={schedulesPerPage}
+                currentPage={currentPage}
+                onPageChange={paginate}
+                sortConfig={sortConfig}
+                onSort={requestSort}
+                containerClassName="assignments-view"
+                className="schedules-table-container"
+                tableClassName="schedules-table"
+            />
 
             {showDistributionModal && selectedSchedule && (
                 <DistributionOptionsModal

@@ -1,71 +1,401 @@
 @use '../../styles/index' as *;
 
-/* DeleteUserModal.scss */
 .delete-user-modal {
-    @include modal-base;
+  @include modal-base;
 
-    .modal-content {
-        @include modal-content;
-        max-width: 400px;
-        text-align: center;
-    }
+  .modal-content {
+    @include modal-content;
+    max-width: 500px;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-light);
+    backdrop-filter: blur(20px);
+    animation: modalSlideUp 0.3s ease-out;
 
-    .close-button {
-        @include modal-close-button;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+      border-radius: var(--radius-2xl);
+      pointer-events: none;
+      z-index: -1;
     }
+  }
+
+  .modal-header {
+    @include modal-header;
+    background: linear-gradient(135deg, var(--error-50), var(--error-100));
+    border-bottom: 1px solid var(--error-200);
 
     h2 {
-        @include modal-title;
+      background: linear-gradient(135deg, var(--error-600), var(--error-700));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: var(--font-weight-bold);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+
+      &::before {
+        content: '⚠️';
+        font-size: 1.5rem;
+      }
+    }
+  }
+
+  .modal-body {
+    @include modal-body;
+    padding: var(--space-6);
+    text-align: center;
+
+    .warning-icon {
+      font-size: 3rem;
+      color: var(--error-500);
+      margin-bottom: var(--space-4);
+      animation: pulse 2s infinite;
     }
 
-    .confirmation-text {
-        margin: 20px 0;
-        
-        p {
-            margin: 10px 0;
-            color: #495057;
-            
-            &.user-name {
-                font-weight: 600;
-                font-size: 1.1rem;
-                color: #343a40;
-            }
-            
-            &.warning {
-                color: #dc3545;
-                font-size: 0.9rem;
-                margin-top: 15px;
-            }
+    .warning-message {
+      font-size: var(--font-size-lg);
+      color: var(--text-primary);
+      margin-bottom: var(--space-4);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--line-height-relaxed);
+    }
+
+    .user-details {
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4);
+      margin: var(--space-4) 0;
+      text-align: left;
+
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        margin-bottom: var(--space-3);
+
+        .user-avatar {
+          width: 48px;
+          height: 48px;
+          border-radius: var(--radius-full);
+          background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-inverse);
+          font-weight: var(--font-weight-bold);
+          font-size: var(--font-size-lg);
         }
+
+        .user-details-text {
+          flex: 1;
+
+          .user-name {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-semibold);
+            color: var(--text-primary);
+            margin-bottom: var(--space-1);
+          }
+
+          .user-email {
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+          }
+
+          .user-role {
+            display: inline-block;
+            padding: var(--space-1) var(--space-3);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-medium);
+            margin-top: var(--space-2);
+
+            &.admin {
+              background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+              color: var(--text-inverse);
+            }
+
+            &.user {
+              background: linear-gradient(135deg, var(--success-500), var(--success-600));
+              color: var(--text-inverse);
+            }
+          }
+        }
+      }
+    }
+
+    .consequences {
+      background: linear-gradient(135deg, var(--error-50), var(--error-100));
+      border: 1px solid var(--error-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4);
+      margin-top: var(--space-4);
+
+      .consequences-title {
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-semibold);
+        color: var(--error-700);
+        margin-bottom: var(--space-2);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+
+        &::before {
+          content: '⚠️';
+          font-size: 1.2rem;
+        }
+      }
+
+      .consequences-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+
+        li {
+          color: var(--error-600);
+          font-size: var(--font-size-sm);
+          margin-bottom: var(--space-1);
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+
+          &::before {
+            content: '•';
+            color: var(--error-500);
+            font-weight: var(--font-weight-bold);
+          }
+
+          &:last-child {
+            margin-bottom: 0;
+          }
+        }
+      }
+    }
+  }
+
+  .modal-footer {
+    @include modal-footer;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-top: 1px solid var(--border-light);
+    justify-content: center;
+    gap: var(--space-3);
+  }
+
+  // Button styling - matching the JS component classes
+  .buttons {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .btn {
+    padding: var(--space-3) var(--space-6);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: relative;
+    overflow: hidden;
+    min-width: 120px;
+    justify-content: center;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    &:hover::before {
+      left: 100%;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+  }
+
+  // Button variants matching JS component classes
+  .secondary {
+    background: linear-gradient(135deg, var(--secondary-500), var(--secondary-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--secondary-600), var(--secondary-700));
+    }
+  }
+
+  .danger {
+    background: linear-gradient(135deg, var(--error-500), var(--error-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--error-600), var(--error-700));
+    }
+  }
+
+  // Loading state
+  .loading {
+    opacity: 0.7;
+    pointer-events: none;
+
+    .spinner {
+      animation: spin 1s linear infinite;
+      margin-right: var(--space-2);
+    }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+
+  @keyframes modalSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .delete-user-modal {
+    .modal-content {
+      max-width: 95vw;
+      margin: var(--space-4);
+    }
+
+    .modal-body {
+      padding: var(--space-4);
+
+      .warning-icon {
+        font-size: 2.5rem;
+      }
+
+      .warning-message {
+        font-size: var(--font-size-base);
+      }
+
+      .user-details {
+        padding: var(--space-3);
+
+        .user-info {
+          .user-avatar {
+            width: 40px;
+            height: 40px;
+            font-size: var(--font-size-base);
+          }
+
+          .user-details-text {
+            .user-name {
+              font-size: var(--font-size-base);
+            }
+          }
+        }
+      }
     }
 
     .buttons {
-        @include modal-buttons;
+      flex-direction: column;
+      gap: var(--space-2);
     }
+
+    .btn {
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--font-size-sm);
+      min-width: 100px;
+    }
+  }
 }
 
-button {
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin: 0 10px;
-}
-
-.confirm-button {
-    background-color: #d9534f;
-    color: white;
-
-    &:hover {
-        background-color: #c9302c;
+@media (max-width: 480px) {
+  .delete-user-modal {
+    .modal-content {
+      max-width: 100vw;
+      margin: var(--space-2);
+      border-radius: var(--radius-xl);
     }
-}
 
-.cancel-button {
-    background-color: #ccc;
-    color: black;
+    .modal-body {
+      padding: var(--space-3);
 
-    &:hover {
-        background-color: #bbb;
+      .warning-icon {
+        font-size: 2rem;
+      }
+
+      .warning-message {
+        font-size: var(--font-size-sm);
+      }
+
+      .user-details {
+        padding: var(--space-2);
+
+        .user-info {
+          flex-direction: column;
+          text-align: center;
+          gap: var(--space-2);
+
+          .user-avatar {
+            width: 48px;
+            height: 48px;
+          }
+        }
+      }
     }
+
+    .btn {
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--font-size-sm);
+      min-width: 80px;
+    }
+  }
 }

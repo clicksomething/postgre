@@ -2,81 +2,321 @@
 @use '../../styles/index' as *;
 
 .edit-user-modal {
-    @include modal-base;
+  @include modal-base;
 
-    .modal-content {
-        @include modal-content;
-        max-width: 500px;
-    }
+  .modal-content {
+    @include modal-content;
+    max-width: 600px;
+    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-light);
+    backdrop-filter: blur(20px);
+    animation: modalSlideUp 0.3s ease-out;
 
-    .close-button {
-        @include modal-close-button;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+      border-radius: var(--radius-2xl);
+      pointer-events: none;
+      z-index: -1;
     }
+  }
+
+  .modal-header {
+    @include modal-header;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-bottom: 1px solid var(--border-light);
 
     h2 {
-        @include modal-title;
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-weight: var(--font-weight-bold);
+    }
+  }
+
+  .modal-body {
+    @include modal-body;
+    padding: var(--space-6);
+  }
+
+  .modal-footer {
+    @include modal-footer;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    border-top: 1px solid var(--border-light);
+  }
+
+  .form-group {
+    @include form-group;
+    margin-bottom: var(--space-5);
+
+    label {
+      display: block;
+      margin-bottom: var(--space-2);
+      font-weight: var(--font-weight-semibold);
+      color: var(--text-primary);
+      font-size: var(--font-size-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: var(--space-3) var(--space-4);
+      border: 2px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      font-size: var(--font-size-base);
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      transition: all var(--transition-base);
+      box-sizing: border-box;
+
+      &:focus {
+        outline: none;
+        border-color: var(--primary-500);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        background: var(--bg-primary);
+      }
+
+      &::placeholder {
+        color: var(--text-muted);
+      }
+
+      &.input-error {
+        border-color: var(--error-500);
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+      }
+    }
+  }
+
+  .error-message {
+    @include error-message;
+    background: linear-gradient(135deg, var(--error-50), var(--error-100));
+    border: 1px solid var(--error-200);
+    color: var(--error-700);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-2);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+  }
+
+  .success-message {
+    @include success-message;
+    background: linear-gradient(135deg, var(--success-50), var(--success-100));
+    border: 1px solid var(--success-200);
+    color: var(--success-700);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    margin-top: var(--space-2);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+  }
+
+  // Button styling
+  .btn {
+    padding: var(--space-3) var(--space-6);
+    border: none;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    &:hover::before {
+      left: 100%;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    }
+  }
+
+  .btn-secondary {
+    background: linear-gradient(135deg, var(--secondary-500), var(--secondary-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--secondary-600), var(--secondary-700));
+    }
+  }
+
+  .btn-danger {
+    background: linear-gradient(135deg, var(--error-500), var(--error-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--error-600), var(--error-700));
+    }
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, var(--success-500), var(--success-600));
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-sm);
+
+    &:hover:not(:disabled) {
+      background: linear-gradient(135deg, var(--success-600), var(--success-700));
+    }
+  }
+
+  // Form validation styling
+  .form-validation {
+    margin-top: var(--space-2);
+
+    .validation-message {
+      font-size: var(--font-size-sm);
+      margin-top: var(--space-1);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+
+      &.error {
+        color: var(--error-600);
+      }
+
+      &.success {
+        color: var(--success-600);
+      }
+
+      .validation-icon {
+        font-size: 1rem;
+      }
+    }
+  }
+
+  // Loading state
+  .loading {
+    opacity: 0.7;
+    pointer-events: none;
+
+    .spinner {
+      animation: spin 1s linear infinite;
+      margin-right: var(--space-2);
+    }
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes modalSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+// Responsive design
+@media (max-width: 768px) {
+  .edit-user-modal {
+    .modal-content {
+      max-width: 95vw;
+      margin: var(--space-4);
+    }
+
+    .modal-body {
+      padding: var(--space-4);
     }
 
     .form-group {
-        @include modal-form-group;
+      margin-bottom: var(--space-4);
+
+      input,
+      select {
+        padding: var(--space-2) var(--space-3);
+        font-size: var(--font-size-sm);
+      }
     }
 
-    .buttons {
-        @include modal-buttons;
+    .btn {
+      padding: var(--space-2) var(--space-4);
+      font-size: var(--font-size-sm);
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .edit-user-modal {
+    .modal-content {
+      max-width: 100vw;
+      margin: var(--space-2);
+      border-radius: var(--radius-xl);
     }
 
-    form {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+    .modal-body {
+      padding: var(--space-3);
     }
-}
 
-.edit-form {
-    display: flex;
-    flex-direction: column;
-}
+    .form-group {
+      margin-bottom: var(--space-3);
 
-.form-group {
-    margin-bottom: 15px;
-}
+      label {
+        font-size: var(--font-size-xs);
+      }
 
-label {
-    margin-bottom: 5px;
-    display: block;
-    font-weight: bold;
-}
-
-input[type="text"],
-input[type="email"],
-input[type="password"],
-select {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box;
-    margin-top: 5px;
-}
-
-button {
-    background-color: #5cb85c;
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-right: 10px;
-
-    &:hover {
-        background-color: #449d44;
+      input,
+      select {
+        padding: var(--space-2);
+        font-size: var(--font-size-sm);
+      }
     }
-}
 
-.cancel-button {
-    background-color: #d9534f;
-
-    &:hover {
-        background-color: #c9302c;
+    .btn {
+      padding: var(--space-2) var(--space-3);
+      font-size: var(--font-size-sm);
     }
+  }
 }

@@ -7,23 +7,31 @@
 
     .modal-content {
         @include modal-content;
-        max-width: 700px;
+        max-width: 600px;
     }
 
-    .close-button {
-        @include modal-close-button;
+    .modal-header {
+        @include modal-header;
     }
 
-    h2 {
-        @include modal-title;
+    .modal-body {
+        @include modal-body;
+    }
+
+    .modal-footer {
+        @include modal-footer;
     }
 
     .form-group {
-        @include modal-form-group;
+        @include form-group;
     }
 
-    .buttons {
-        @include modal-buttons;
+    .error-message {
+        @include error-message;
+    }
+
+    .success-message {
+        @include success-message;
     }
 }
 

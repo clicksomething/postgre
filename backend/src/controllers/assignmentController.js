@@ -349,11 +349,11 @@ const assignmentController = {
             } = req.body;
 
             // Validate parameters
-            if (populationSize < 10 || populationSize > 200) {
-                return res.status(400).json({ message: 'Population size must be between 10 and 200' });
+            if (populationSize < 10 || populationSize > 500) {
+                return res.status(400).json({ message: 'Population size must be between 10 and 500' });
             }
-            if (generations < 10 || generations > 500) {
-                return res.status(400).json({ message: 'Generations must be between 10 and 500' });
+            if (generations < 10 || generations > 1000) {
+                return res.status(400).json({ message: 'Generations must be between 10 and 1000' });
             }
             if (mutationRate < 0 || mutationRate > 1) {
                 return res.status(400).json({ message: 'Mutation rate must be between 0 and 1' });
@@ -557,7 +557,14 @@ const assignmentController = {
             // Run genetic algorithm
             let geneticResult;
             try {
-                const geneticService = new GeneticAssignmentService();
+                const geneticService = new GeneticAssignmentService({
+                    populationSize: 300,
+                    generations: 200,
+                    mutationRate: 0.2,
+                    crossoverRate: 0.8,
+                    elitismRate: 0.1,
+                    useDeterministicInit: true
+                });
                 geneticResult = await geneticService.assignObserversWithGA(examIds);
             } catch (geneticError) {
                 console.error('Error running genetic algorithm:', geneticError);
@@ -580,8 +587,15 @@ const assignmentController = {
                     // Wait a bit longer
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // Retry
-                    const geneticService = new GeneticAssignmentService();
+                    // Retry with same optimal parameters
+                    const geneticService = new GeneticAssignmentService({
+                        populationSize: 300,
+                        generations: 200,
+                        mutationRate: 0.2,
+                        crossoverRate: 0.8,
+                        elitismRate: 0.1,
+                        useDeterministicInit: true
+                    });
                     geneticResult = await geneticService.assignObserversWithGA(examIds);
                 } else {
                     throw geneticError;
