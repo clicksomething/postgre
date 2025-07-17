@@ -75,9 +75,11 @@ const DataTable = ({
             <ClientOnlyTooltip />
             
             <div className="data-table-header">
-                <div className="table-title">
-                    {title}
-                </div>
+                {title && (
+                    <div className="table-title">
+                        {title}
+                    </div>
+                )}
                 
                 <div className="table-actions">
                     <div className="search-container">
@@ -159,15 +161,50 @@ const DataTable = ({
                         Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, data.length)} of {data.length} results
                     </div>
                     <div className="pagination">
-                        {pageNumbers.map(number => (
+                        {/* Previous button */}
+                        <button
+                            className="page-button"
+                            onClick={() => onPageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                        >
+                            ←
+                        </button>
+                        
+                        {/* Previous page (if not on first page) */}
+                        {currentPage > 1 && (
                             <button
-                                key={number}
-                                className={`page-button ${currentPage === number ? 'active' : ''}`}
-                                onClick={() => onPageChange(number)}
+                                className="page-button"
+                                onClick={() => onPageChange(currentPage - 1)}
                             >
-                                {number}
+                                {currentPage - 1}
                             </button>
-                        ))}
+                        )}
+                        
+                        {/* Current page */}
+                        <button
+                            className="page-button active"
+                        >
+                            {currentPage}
+                        </button>
+                        
+                        {/* Next page (if not on last page) */}
+                        {currentPage < pageNumbers.length && (
+                            <button
+                                className="page-button"
+                                onClick={() => onPageChange(currentPage + 1)}
+                            >
+                                {currentPage + 1}
+                            </button>
+                        )}
+                        
+                        {/* Next button */}
+                        <button
+                            className="page-button"
+                            onClick={() => onPageChange(currentPage + 1)}
+                            disabled={currentPage === pageNumbers.length}
+                        >
+                            →
+                        </button>
                     </div>
                 </div>
             )}

@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { FaUpload, FaList, FaCalendarAlt, FaUserCheck, FaPlus } from 'react-icons/fa';
+import { FaUpload, FaList, FaUserCheck } from 'react-icons/fa';
 import ViewSchedules from './ViewSchedules';
 import UploadSchedule from './UploadSchedule';
 import ScheduleDetails from './ScheduleDetails';
 import AssignObserversModal from './Modals/AssignObserversModal';
 import AssignmentsView from './AssignmentsView';
 import axios from 'axios';
-import EditExamModal from './Modals/EditExamModal';
-import DeleteExamModal from './Modals/DeleteExamModal';
-import DistributionOptionsModal from './Modals/DistributionOptionsModal';
 import './ManageExams.scss';
 
 const ManageExams = () => {
@@ -17,12 +14,6 @@ const ManageExams = () => {
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [selectedExamForAssignment, setSelectedExamForAssignment] = useState(null);
     const [schedules, setSchedules] = useState([]);
-    const [exams, setExams] = useState([]);
-    const [selectedExam, setSelectedExam] = useState(null);
-    const [isAssignObserversModalOpen, setIsAssignObserversModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [isDistributionOptionsModalOpen, setIsDistributionOptionsModalOpen] = useState(false);
 
     useEffect(() => {
         fetchSchedules();
@@ -58,23 +49,8 @@ const ManageExams = () => {
         setActiveView('details');
     };
 
-    const handleAssignClick = (exam) => {
-        setSelectedExamForAssignment(exam);
-        setShowAssignModal(true);
-    };
-
-    const handleViewDetails = (schedule) => {
-        const token = localStorage.getItem('authToken');
-        if (!token) {
-            alert('Please log in to view details');
-            return;
-        }
-        setSelectedSchedule(schedule);
-        setActiveView('details');
-    };
-
     return (
-        <div className="manage-exams-container">
+        <div className="manage-exams-page-wrapper">
             <h1>Exam Management</h1>
             
             <div className="exam-actions">
@@ -98,23 +74,21 @@ const ManageExams = () => {
                 </button>
             </div>
 
-            <div className="exam-content">
-                {activeView === 'schedules' && (
-                    <ViewSchedules schedules={schedules} onScheduleSelect={handleScheduleSelect} />
-                )}
-                {activeView === 'upload' && (
-                    <UploadSchedule onUploadSuccess={() => setActiveView('schedules')} />
-                )}
-                {activeView === 'assignments' && (
-                    <AssignmentsView />
-                )}
-                {activeView === 'details' && selectedSchedule && (
-                    <ScheduleDetails 
-                        schedule={selectedSchedule}
-                        onBack={() => setActiveView('schedules')}
-                    />
-                )}
-            </div>
+            {activeView === 'schedules' && (
+                <ViewSchedules schedules={schedules} onScheduleSelect={handleScheduleSelect} />
+            )}
+            {activeView === 'upload' && (
+                <UploadSchedule onUploadSuccess={() => setActiveView('schedules')} />
+            )}
+            {activeView === 'assignments' && (
+                <AssignmentsView />
+            )}
+            {activeView === 'details' && selectedSchedule && (
+                <ScheduleDetails 
+                    schedule={selectedSchedule}
+                    onBack={() => setActiveView('schedules')}
+                />
+            )}
 
             {showAssignModal && selectedExamForAssignment && (
                 <AssignObserversModal

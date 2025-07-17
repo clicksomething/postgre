@@ -416,9 +416,9 @@ const ManageObservers = () => {
     ];
 
     return (
-        <div className="manage-observers-container">
+        <div className="manage-observers-page-wrapper">
+            <h1>Manage Observers</h1>
             <DataTable
-                title="Manage Observers"
                 data={sortedObservers}
                 columns={columns}
                 loading={loading}
@@ -435,7 +435,7 @@ const ManageObservers = () => {
                 sortConfig={sortConfig}
                 onSort={requestSort}
                 actionButtons={actionButtons}
-                containerClassName="manage-observers-container"
+                containerClassName="manage-observers-page-wrapper"
                 className="observer-table-container"
                 tableClassName="observer-table"
             />

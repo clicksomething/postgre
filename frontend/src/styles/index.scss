@@ -1,11 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-// Import our design system
 @import 'variables';
 @import 'modal';
 
-// Reset and base styles
 * {
   box-sizing: border-box;
 }
@@ -13,11 +11,11 @@
 html {
   scroll-behavior: smooth;
   font-size: 16px;
+  scroll-padding-top: calc(var(--navbar-height) + var(--space-4));
 }
 
 body {
   margin: 0;
-  padding-top: var(--navbar-height);
   font-family: var(--font-family-sans);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-normal);
@@ -27,8 +25,83 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+}
+
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  margin-top: var(--navbar-height);
+  padding: var(--space-6) var(--space-4);
+  position: relative;
+  z-index: 1;
+}
+
+// Ensure all page containers have proper spacing
+.page-container {
+  min-height: calc(100vh - var(--navbar-height));
+  padding-top: var(--space-6);
+  position: relative;
+  z-index: 1;
+}
+
+// Ensure absolutely positioned elements don't interfere with navbar
+[class*="container"] {
+  position: relative;
+  z-index: 1;
+}
+
+// Fix for any components that might be positioned behind navbar
+.container, .page-container, .main-content {
+  margin-top: 0;
+  padding-top: var(--space-6);
+}
+
+// Ensure proper z-index hierarchy
+.navbar {
+  z-index: var(--z-fixed) !important;
+}
+
+.modal, .modal-backdrop {
+  z-index: var(--z-modal-backdrop) !important;
+}
+
+.modal-content {
+  z-index: var(--z-modal) !important;
+}
+
+.toast, .notification {
+  z-index: var(--z-toast) !important;
+}
+
+// Fix scroll behavior and ensure content doesn't hide behind navbar
+html {
+  scroll-padding-top: calc(var(--navbar-height) + var(--space-4));
+}
+
+// Ensure all main content areas have proper spacing
+.dashboard-container,
+.manage-observers-container,
+.manage-users-container,
+.manage-exams-container,
+.comparison-container,
+.view-schedules,
+.upload-schedule {
+  min-height: calc(100vh - var(--navbar-height));
+  padding-top: var(--space-6);
+  position: relative;
+  z-index: 1;
+}
+
+// Fix for any floating action buttons
+.create-button,
+.floating-action-button {
+  z-index: var(--z-fixed);
+  bottom: calc(var(--space-6) + var(--navbar-height));
 }
 
 // Typography

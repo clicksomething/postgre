@@ -7,7 +7,7 @@
   animation: slideUp 0.4s ease-out;
 
   .data-table-header {
-    padding: var(--space-6);
+    padding: 0 var(--space-3) var(--space-3) var(--space-3);
     border-bottom: 1px solid var(--border-light);
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
 
@@ -152,7 +152,7 @@
 
   .data-table-content {
     overflow-x: auto;
-    max-height: 70vh; // Limit height to 70% of viewport height
+    max-height: 65vh; // Balance between table space and pagination visibility
     overflow-y: auto; // Add vertical scrollbar when needed
 
     .data-table {
@@ -306,10 +306,17 @@
       color: var(--text-muted);
     }
 
-    .pagination {
+        .pagination {
       display: flex;
       align-items: center;
       gap: var(--space-1);
+      margin: 0 auto;
+
+      .pagination-ellipsis {
+        padding: 0 var(--space-2);
+        color: var(--text-muted);
+        font-weight: var(--font-weight-medium);
+      }
 
       .page-button {
         display: flex;

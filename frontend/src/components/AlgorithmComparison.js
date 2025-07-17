@@ -65,22 +65,18 @@ const AlgorithmComparison = () => {
 
     if (loading) {
         return (
-            <div className="comparison-container">
-                <div className="comparison-content">
-                    <div className="loading">Loading comparison data...</div>
-                </div>
+            <div className="comparison-page-wrapper">
+                <div className="loading">Loading comparison data...</div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div className="comparison-container">
-                <div className="comparison-content">
-                    <div className="error-message">
-                        {error}
-                        <button onClick={fetchComparison} className="retry-button">Retry</button>
-                    </div>
+            <div className="comparison-page-wrapper">
+                <div className="error-message">
+                    {error}
+                    <button onClick={fetchComparison} className="retry-button">Retry</button>
                 </div>
             </div>
         );
@@ -88,31 +84,27 @@ const AlgorithmComparison = () => {
 
     if (!comparison) {
         return (
-            <div className="comparison-container">
-                <div className="comparison-content">
-                    <div className="info-message">
-                        No comparison data available. Please run both algorithms first.
-                    </div>
+            <div className="comparison-page-wrapper">
+                <div className="info-message">
+                    No comparison data available. Please run both algorithms first.
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="comparison-container">
-            <div className="comparison-content">
-                <div className="comparison-header">
-                    <h1>Algorithm Comparison Report</h1>
-                    <button onClick={() => { fetchComparison(); fetchTrends(); }} className="refresh-button">
-                        <FaSyncAlt /> Refresh
-                    </button>
-                </div>
-
-                <SummaryCards comparison={comparison} />
-                <QualityScoresTable comparison={comparison} getScoreColor={getScoreColor} />
-                <PerformanceTable comparison={comparison} />
-                <TrendsSection trends={trends} />
+        <div className="comparison-page-wrapper">
+            <div className="comparison-header">
+                <h1>Algorithm Comparison Report</h1>
+                <button onClick={() => { fetchComparison(); fetchTrends(); }} className="refresh-button">
+                    <FaSyncAlt /> Refresh
+                </button>
             </div>
+
+            <SummaryCards comparison={comparison} />
+            <QualityScoresTable comparison={comparison} getScoreColor={getScoreColor} />
+            <PerformanceTable comparison={comparison} />
+            <TrendsSection trends={trends} />
         </div>
     );
 };

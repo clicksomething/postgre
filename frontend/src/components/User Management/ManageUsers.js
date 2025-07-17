@@ -250,9 +250,9 @@ const ManageUsers = () => {
     ];
 
     return (
-      <div className="manage-users-container">
+      <div className="manage-users-page-wrapper">
+        <h1>Manage Users</h1>
         <DataTable
-          title="Manage Users"
           data={sortedUsers}
           columns={columns}
           loading={loading}
@@ -269,7 +269,7 @@ const ManageUsers = () => {
           sortConfig={sortConfig}
           onSort={requestSort}
           actionButtons={actionButtons}
-          containerClassName="manage-users-container"
+          containerClassName="manage-users-page-wrapper"
         />
 
         {editingUser && (

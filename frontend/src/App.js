@@ -13,7 +13,6 @@ import AlgorithmComparison from './components/AlgorithmComparison';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/common';
 
-// Separate component to use AuthContext (since we can't use hooks outside of Router)
 const AppContent = () => {
   const { user, loading, isAuthenticated, isAdmin } = useAuth();
 
@@ -22,20 +21,21 @@ const AppContent = () => {
   }
 
   return (
-    <div>
-      {/* Conditionally render the Navbar only if the user is logged in */}
+    <div className="app-wrapper">
       {isAuthenticated && <Navbar />}
-      <Routes>
-        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
-        <Route path="/manage-users" element={isAuthenticated && isAdmin ? <ManageUsers /> : <Navigate to="/login" />} />          
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/manage-observers" element={isAuthenticated ? <ManageObservers /> : <Navigate to="/login" />} />
-        <Route path="/manage-exams" element={isAuthenticated && isAdmin ? <ManageExams /> : <Navigate to="/login" />} />
-        <Route path="/schedules/:id" element={isAuthenticated ? <ScheduleDetails /> : <Navigate to="/login" />} />
-        <Route path="/algorithm-comparison" element={isAuthenticated && isAdmin ? <AlgorithmComparison /> : <Navigate to="/login" />} />
-      </Routes>
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
+          <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
+          <Route path="/dashboard" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
+          <Route path="/manage-users" element={isAuthenticated && isAdmin ? <ManageUsers /> : <Navigate to="/login" />} />          
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/manage-observers" element={isAuthenticated ? <ManageObservers /> : <Navigate to="/login" />} />
+          <Route path="/manage-exams" element={isAuthenticated && isAdmin ? <ManageExams /> : <Navigate to="/login" />} />
+          <Route path="/schedules/:id" element={isAuthenticated ? <ScheduleDetails /> : <Navigate to="/login" />} />
+          <Route path="/algorithm-comparison" element={isAuthenticated && isAdmin ? <AlgorithmComparison /> : <Navigate to="/login" />} />
+        </Routes>
+      </main>
     </div>
   );
 };
