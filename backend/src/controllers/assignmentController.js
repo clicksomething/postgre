@@ -342,26 +342,19 @@ const assignmentController = {
 
             const { scheduleId } = req.params;
             const { 
-                populationSize = 150,  // Optimized for large datasets
-                generations = 150,     // Optimized for large datasets
-                mutationRate = 0.15,   // Optimized for large datasets
-                crossoverRate = 0.7,   // Optimized for large datasets
-                elitismRate = 0.15,    // Optimized for large datasets
-                useDeterministicInit = true  // Default to true for better results
+                populationSize,
+                generations,
+                mutationRate,
+                crossoverRate,
+                elitismRate,
+                useDeterministicInit
             } = req.body;
 
-            // Validate parameters - Updated ranges for large datasets
-            if (populationSize < 50 || populationSize > 500) {
-                return res.status(400).json({ message: 'Population size must be between 50 and 500 for large datasets' });
-            }
-            if (generations < 50 || generations > 500) {
-                return res.status(400).json({ message: 'Generations must be between 50 and 500 for large datasets' });
-            }
-            if (mutationRate < 0.05 || mutationRate > 0.5) {
-                return res.status(400).json({ message: 'Mutation rate must be between 0.05 and 0.5 for large datasets' });
-            }
-            if (crossoverRate < 0.5 || crossoverRate > 0.9) {
-                return res.status(400).json({ message: 'Crossover rate must be between 0.5 and 0.9 for large datasets' });
+            // Validate that required parameters are provided
+            if (!populationSize || !generations || !mutationRate || !crossoverRate || !elitismRate) {
+                return res.status(400).json({ 
+                    message: 'All genetic algorithm parameters must be provided: populationSize, generations, mutationRate, crossoverRate, elitismRate' 
+                });
             }
 
             // Get all exam IDs for this schedule
@@ -377,6 +370,15 @@ const assignmentController = {
             const examIds = examsResult.rows.map(row => row.examid);
 
             // Create GA service with custom parameters
+            console.log('[GA] Using parameters from frontend:', {
+                populationSize,
+                generations,
+                mutationRate,
+                crossoverRate,
+                elitismRate,
+                useDeterministicInit
+            });
+            
             const gaService = new GeneticAssignmentService({
                 populationSize,
                 generations,
@@ -565,13 +567,23 @@ const assignmentController = {
             // Run genetic algorithm
             let geneticResult;
             try {
+                // Use parameters from request body
+                const { 
+                    populationSize,
+                    generations,
+                    mutationRate,
+                    crossoverRate,
+                    elitismRate,
+                    useDeterministicInit
+                } = req.body;
+
                 const geneticService = new GeneticAssignmentService({
-                    populationSize: 300,
-                    generations: 200,
-                    mutationRate: 0.2,
-                    crossoverRate: 0.8,
-                    elitismRate: 0.1,
-                    useDeterministicInit: true
+                    populationSize,
+                    generations,
+                    mutationRate,
+                    crossoverRate,
+                    elitismRate,
+                    useDeterministicInit
                 });
                 geneticResult = await geneticService.assignObserversWithGA(examIds);
             } catch (geneticError) {
@@ -595,14 +607,23 @@ const assignmentController = {
                     // Wait a bit longer
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // Retry with same optimal parameters
+                    // Retry with same parameters from request
+                    const { 
+                        populationSize,
+                        generations,
+                        mutationRate,
+                        crossoverRate,
+                        elitismRate,
+                        useDeterministicInit
+                    } = req.body;
+
                     const geneticService = new GeneticAssignmentService({
-                        populationSize: 300,
-                        generations: 200,
-                        mutationRate: 0.2,
-                        crossoverRate: 0.8,
-                        elitismRate: 0.1,
-                        useDeterministicInit: true
+                        populationSize,
+                        generations,
+                        mutationRate,
+                        crossoverRate,
+                        elitismRate,
+                        useDeterministicInit
                     });
                     geneticResult = await geneticService.assignObserversWithGA(examIds);
                 } else {

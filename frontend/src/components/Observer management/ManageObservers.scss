@@ -5,44 +5,44 @@
   background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
   position: relative;
   z-index: 1;
-  font-family: var(--font-family-sans);
-  max-width: 1200px;
+    font-family: var(--font-family-sans);
+    max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
   animation: slideUp 0.4s ease-out;
   overflow-y: auto;
   overflow-x: hidden;
 
-  h1 {
+    h1 {
     color: var(--text-primary);
     margin-bottom: var(--space-4);
     margin-top: 0;
-    text-align: center;
+        text-align: center;
     font-weight: var(--font-weight-bold);
     font-size: var(--font-size-3xl);
     background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-  }
-
-  // Search bar styling is handled by DataTable component
-
-  .observer-table-container {
-    overflow-x: auto;
-    margin-bottom: 2rem;
-  }
-
-  .observer-table {
-    width: 100%;
-    border-collapse: collapse;
-
-    th,
-    td {
-      border: 1px solid #dee2e6;
-      padding: 12px;
-      text-align: left;
     }
+
+    // Search bar styling is handled by DataTable component
+
+    .observer-table-container {
+        overflow-x: auto;
+        margin-bottom: 2rem;
+    }
+
+    .observer-table {
+        width: 100%;
+        border-collapse: collapse;
+
+        th,
+        td {
+            border: 1px solid #dee2e6;
+            padding: 12px;
+            text-align: left;
+        }
 
     // Make name column wider for Arabic names
     th:nth-child(2),
@@ -54,222 +54,222 @@
       text-overflow: ellipsis;
     }
 
-    th {
-      background-color: #39A2DB;
-      color: #fff;
-      font-weight: bold;
-      cursor: pointer;
-      user-select: none;
-      transition: background-color 0.3s ease;
+        th {
+            background-color: #39A2DB;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.3s ease;
 
-      &:hover {
-        background-color: #2E86AB;
-      }
-    }
+            &:hover {
+                background-color: #2E86AB;
+            }
+        }
 
-    tr {
-      transition: all 0.2s ease;
-      
-      &:hover {
-        background-color: #f1f1f1;
-        transform: scale(1.002);
-      }
-    }
+        tr {
+            transition: all 0.2s ease;
+            
+            &:hover {
+                background-color: #f1f1f1;
+                transform: scale(1.002);
+            }
+        }
 
-    td {
-      &:last-child {
-        white-space: nowrap;
-        min-width: 160px;
-      }
-    }
+        td {
+            &:last-child {
+                white-space: nowrap;
+                min-width: 160px;
+            }
+        }
 
-    .edit-button, .delete-button {
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      margin-right: 8px;
+        .edit-button, .delete-button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            margin-right: 8px;
 
-      &:hover {
-        transform: translateY(-1px);
+            &:hover {
+                transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-      }
-    }
+            }
+        }
 
-    .edit-button {
-      background-color: #007bff;
+        .edit-button {
+            background-color: #007bff;
       color: white;
 
-      &:hover {
-        background-color: #0056b3;
-      }
-    }
+            &:hover {
+                background-color: #0056b3;
+            }
+        }
 
-    .delete-button {
-      background-color: #dc3545;
+        .delete-button {
+            background-color: #dc3545;
       color: white;
 
-      &:hover {
-        background-color: #c82333;
-      }
+            &:hover {
+                background-color: #c82333;
+            }
+        }
     }
-  }
 
   // Time slot cell styling
-  .time-slot-cell {
-    position: relative;
-    padding: 8px;
-    text-align: left;
-    transition: background-color 0.2s ease;
+    .time-slot-cell {
+        position: relative;
+        padding: 8px;
+        text-align: left;
+        transition: background-color 0.2s ease;
 
-    &:hover {
-      background-color: rgba(0, 123, 255, 0.05);
+        &:hover {
+            background-color: rgba(0, 123, 255, 0.05);
+        }
+
+        .add-time-slot-button {
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: absolute;
+            right: 2px;
+            bottom: 2px;
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+
+            svg {
+                color: #007bff;
+                font-size: 12px;
+                transition: color 0.2s ease;
+            }
+
+            &:hover {
+                transform: scale(1);
+                background: #fff;
+
+                svg {
+                    color: #0056b3;
+                }
+            }
+        }
+
+        &:hover .add-time-slot-button {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .full-time-indicator {
+            display: block;
+            text-align: center;
+            padding: 8px 12px;
+            background-color: #e2e8f0;
+            border: 2px solid #cbd5e0;
+            border-radius: 6px;
+            color: #4a5568;
+            font-size: 0.9em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 4px 0;
+            transition: all 0.2s ease;
+            
+            &:hover {
+                background-color: #cbd5e0;
+                border-color: #a0aec0;
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            &::before {
+                content: '👨‍💼'; // Unicode emoji for "office worker"
+                margin-right: 6px;
+            }
+        }
+
+        // Hide the add time slot button when observer is full-time
+        &.full-time {
+            background-color: rgba(226, 232, 240, 0.3);
+            position: relative;
+            
+            // Add a subtle diagonal pattern
+            &::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-image: repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(0, 0, 0, 0.03) 10px,
+                    rgba(0, 0, 0, 0.03) 20px
+                );
+                pointer-events: none; // This ensures the pattern doesn't interfere with clicks
+            }
+
+            // Hide the add time slot button for full-time observers
+            .add-time-slot-button {
+                display: none;
+            }
+        }
     }
 
-    .add-time-slot-button {
-      opacity: 0;
-      transform: scale(0.9);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      position: absolute;
-      right: 2px;
-      bottom: 2px;
-      padding: 6px;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+    .time-slot {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        margin: 2px 0;
+        padding: 4px 8px;
+        background-color: rgba(233, 236, 239, 0.5);
+        border-radius: 4px;
+        transition: all 0.2s ease;
 
-      svg {
-        color: #007bff;
-        font-size: 12px;
-        transition: color 0.2s ease;
-      }
+        &:hover {
+            background-color: #e9ecef;
+            transform: translateY(-1px);
+        }
 
-      &:hover {
-        transform: scale(1);
-        background: #fff;
+        .time-slot-actions {
+            opacity: 0;
+            transform: translateX(-5px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            gap: 2px;
+            margin-left: 4px;
+        }
+
+        &:hover .time-slot-actions {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    .edit-time-slot-button {
+        padding: 4px;
+        border-radius: 3px;
+        transition: all 0.2s ease;
+
+        &:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+            transform: scale(1.1);
+        }
 
         svg {
-          color: #0056b3;
+            transition: transform 0.2s ease;
         }
-      }
     }
-
-    &:hover .add-time-slot-button {
-      opacity: 1;
-      transform: scale(1);
-    }
-
-    .full-time-indicator {
-      display: block;
-      text-align: center;
-      padding: 8px 12px;
-      background-color: #e2e8f0;
-      border: 2px solid #cbd5e0;
-      border-radius: 6px;
-      color: #4a5568;
-      font-size: 0.9em;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin: 4px 0;
-      transition: all 0.2s ease;
-      
-      &:hover {
-        background-color: #cbd5e0;
-        border-color: #a0aec0;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-
-      &::before {
-        content: '👨‍💼'; // Unicode emoji for "office worker"
-        margin-right: 6px;
-      }
-    }
-
-    // Hide the add time slot button when observer is full-time
-    &.full-time {
-      background-color: rgba(226, 232, 240, 0.3);
-      position: relative;
-      
-      // Add a subtle diagonal pattern
-      &::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-image: repeating-linear-gradient(
-          45deg,
-          transparent,
-          transparent 10px,
-          rgba(0, 0, 0, 0.03) 10px,
-          rgba(0, 0, 0, 0.03) 20px
-        );
-        pointer-events: none; // This ensures the pattern doesn't interfere with clicks
-      }
-
-      // Hide the add time slot button for full-time observers
-      .add-time-slot-button {
-        display: none;
-      }
-    }
-  }
-
-  .time-slot {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    margin: 2px 0;
-    padding: 4px 8px;
-    background-color: rgba(233, 236, 239, 0.5);
-    border-radius: 4px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background-color: #e9ecef;
-      transform: translateY(-1px);
-    }
-
-    .time-slot-actions {
-      opacity: 0;
-      transform: translateX(-5px);
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-      display: inline-flex;
-      gap: 2px;
-      margin-left: 4px;
-    }
-
-    &:hover .time-slot-actions {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  .edit-time-slot-button {
-    padding: 4px;
-    border-radius: 3px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background-color: rgba(0, 123, 255, 0.1);
-      transform: scale(1.1);
-    }
-
-    svg {
-      transition: transform 0.2s ease;
-    }
-  }
 
   // Empty state styling
   .empty-state {
@@ -289,9 +289,9 @@
 
   // Loading spinner
   .loading-spinner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     font-size: 1.2rem;
     color: #007bff;
 
@@ -308,7 +308,7 @@
 
     100% {
       transform: rotate(360deg);
-    }
+        }
   }
 
   // Pagination
@@ -334,7 +334,7 @@
         &:hover {
           background-color: #e9ecef;
         }
-      }
+    }
 
       &.active .page-link {
         background-color: #007bff;
@@ -350,9 +350,9 @@
   from {
     opacity: 0;
     transform: translateY(20px);
-  }
+        }
   to {
     opacity: 1;
     transform: translateY(0);
-  }
+    }
 }

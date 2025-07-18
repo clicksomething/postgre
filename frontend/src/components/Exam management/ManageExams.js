@@ -74,21 +74,21 @@ const ManageExams = () => {
                 </button>
             </div>
 
-            {activeView === 'schedules' && (
-                <ViewSchedules schedules={schedules} onScheduleSelect={handleScheduleSelect} />
-            )}
-            {activeView === 'upload' && (
-                <UploadSchedule onUploadSuccess={() => setActiveView('schedules')} />
-            )}
-            {activeView === 'assignments' && (
-                <AssignmentsView />
-            )}
-            {activeView === 'details' && selectedSchedule && (
-                <ScheduleDetails 
-                    schedule={selectedSchedule}
-                    onBack={() => setActiveView('schedules')}
-                />
-            )}
+                {activeView === 'schedules' && (
+                    <ViewSchedules schedules={schedules} onScheduleSelect={handleScheduleSelect} />
+                )}
+                {activeView === 'upload' && (
+                    <UploadSchedule onUploadSuccess={() => setActiveView('schedules')} />
+                )}
+                {activeView === 'assignments' && (
+                    <AssignmentsView />
+                )}
+                {activeView === 'details' && selectedSchedule && (
+                    <ScheduleDetails 
+                        schedule={selectedSchedule}
+                        onBack={() => setActiveView('schedules')}
+                    />
+                )}
 
             {showAssignModal && selectedExamForAssignment && (
                 <AssignObserversModal

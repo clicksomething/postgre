@@ -76,9 +76,9 @@ const DataTable = ({
             
             <div className="data-table-header">
                 {title && (
-                    <div className="table-title">
-                        {title}
-                    </div>
+                <div className="table-title">
+                    {title}
+                </div>
                 )}
                 
                 <div className="table-actions">

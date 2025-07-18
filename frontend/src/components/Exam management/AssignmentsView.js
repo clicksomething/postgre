@@ -64,7 +64,7 @@ const AssignmentsView = () => {
         setShowDistributionModal(true);
     };
 
-    const handleAlgorithmSelection = async (algorithmId) => {
+    const handleAlgorithmSelection = async (algorithmId, customParams = null) => {
         try {
             const token = localStorage.getItem('authToken');
             let endpoint = '';
@@ -75,18 +75,17 @@ const AssignmentsView = () => {
                 endpoint = `http://localhost:3000/api/exams/distribute/random/${selectedSchedule.scheduleId}`;
             } else if (algorithmId === 'genetic') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/assign-genetic`;
-                // Optimal genetic algorithm parameters for large problems (895 exams, 167 observers)
-                requestBody = {
-                    populationSize: 50,
-                    generations: 50,
-                    mutationRate: 0.1,
+                // Use custom parameters if provided, otherwise use defaults
+                requestBody = customParams || {
+                    populationSize: 200,
+                    generations: 100,
+                    mutationRate: 0.2,
                     crossoverRate: 0.8,
-                    elitismRate: 0.1,
-                    convergenceThreshold: 0.001,
-                    maxGenerationsWithoutImprovement: 10,
-                    restartAfterGenerations: 15,
+                    elitismRate: 0.15,
                     useDeterministicInit: true
                 };
+                
+                console.log('[Frontend] Sending genetic algorithm parameters:', requestBody);
                 
 
             } else if (algorithmId === 'compare') {
@@ -116,15 +115,50 @@ const AssignmentsView = () => {
                       ).join('\n')}`
                 );
             } else if (algorithmId === 'genetic') {
-                const { totalExams, assignedExams, failedExams, fitness, convergenceGeneration } = response.data;
+                // Show initial message that algorithm has started
+                alert('Genetic algorithm has started running in the background. This may take a few minutes. You will be notified when it completes.');
                 
-                alert(`Genetic Algorithm Distribution Complete!\n` +
-                      `Total Exams: ${totalExams}\n` +
-                      `Successful Assignments: ${assignedExams}\n` +
-                      `Failed Assignments: ${failedExams}\n` +
-                      `Best Fitness Score: ${fitness ? fitness.toFixed(3) : 'N/A'}\n` +
-                      `Converged at Generation: ${convergenceGeneration || 'N/A'}`
-                );
+                // Poll for completion status
+                const pollForCompletion = async () => {
+                    try {
+                        // Wait a bit before first check
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        
+                        // Check if assignments have been updated
+                        const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
+                            headers: { 
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        // Find the current schedule
+                        const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
+                        
+                        if (currentSchedule && currentSchedule.assignedExams > 0) {
+                            // Algorithm has completed and applied results
+                            alert(`Genetic Algorithm Distribution Complete!\n` +
+                                  `Total Exams: ${currentSchedule.totalExams}\n` +
+                                  `Successful Assignments: ${currentSchedule.assignedExams}\n` +
+                                  `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
+                                  `Status: ${currentSchedule.assignmentStatus}`
+                            );
+                            
+                            // Refresh the data
+                            fetchScheduleAssignments();
+                            return;
+                        }
+                        
+                        // If not complete, poll again in 3 seconds
+                        setTimeout(pollForCompletion, 3000);
+                    } catch (error) {
+                        console.error('Error polling for completion:', error);
+                        alert('Error checking algorithm completion status. Please refresh the page to see results.');
+                    }
+                };
+                
+                // Start polling
+                pollForCompletion();
             } else if (algorithmId === 'compare') {
                 const { comparison, appliedAlgorithm, message } = response.data;
                 

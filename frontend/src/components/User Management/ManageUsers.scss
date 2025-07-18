@@ -86,8 +86,8 @@
     &.user {
       background: linear-gradient(135deg, var(--secondary-400), var(--secondary-500));
       color: white;
+      }
     }
-  }
 
   .edit-button, .delete-button {
     display: inline-flex;
@@ -129,16 +129,16 @@
       background: linear-gradient(135deg, var(--error-600), var(--error-700));
     }
   }
-}
+  }
 
 // Animation
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
   }
 }
