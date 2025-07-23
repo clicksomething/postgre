@@ -136,9 +136,6 @@ const EditScheduleModal = ({ schedule, onClose, onUpdate }) => {
             <div className="modal-content">
                 <div className="modal-header">
                     <h2>Edit Schedule</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <FaTimes />
-                    </button>
                 </div>
 
                 {step === 1 ? (

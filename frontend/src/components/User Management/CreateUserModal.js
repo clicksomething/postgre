@@ -106,9 +106,6 @@ const CreateUserModal = ({ onClose, onCreate }) => {
     return (
         <div className="create-user-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </button>
                 <h2>Create New User</h2>
 
                 <div className="form-progress">
@@ -193,12 +190,12 @@ const CreateUserModal = ({ onClose, onCreate }) => {
                     </div>
 
                     <div className="buttons">
-                        <button type="button" className="secondary" onClick={onClose}>
+                        <button type="button" className="button secondary" onClick={onClose}>
                             <FaTimes /> Cancel
                         </button>
                         <button 
                             type="submit" 
-                            className="primary"
+                            className="button primary"
                             disabled={isSubmitting}
                         >
                             <FaSave /> {isSubmitting ? 'Creating...' : 'Create User'}

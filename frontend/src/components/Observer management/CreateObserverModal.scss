@@ -34,4 +34,41 @@
         @include success-message;
     }
 }
+
+.password-group {
+  position: relative;
+
+  .password-input {
+    display: flex;
+    align-items: center;
+    position: relative;
+
+    input[type="password"],
+    input[type="text"] {
+      flex: 1;
+      padding-right: 2.5rem; // space for the eye icon
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+
+      &:hover {
+        color: var(--text-primary);
+      }
+    }
+  }
+}
   

@@ -10,9 +10,6 @@ const DeleteObserverModal = ({ observer, onClose, onConfirm }) => {
     return (
         <div className="delete-observer-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </button>
                 <h2>Delete Observer</h2>
                 <div className="confirmation-text">
                     <p>Are you sure you want to delete the observer:</p>

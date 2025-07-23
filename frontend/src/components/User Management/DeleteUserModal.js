@@ -10,9 +10,6 @@ const DeleteUserModal = ({ user, onClose, onConfirm }) => {
     return (
         <div className="delete-user-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </button>
                 <h2>Delete User</h2>
                 <div className="confirmation-text">
                     <p>Are you sure you want to delete the user:</p>
@@ -20,10 +17,10 @@ const DeleteUserModal = ({ user, onClose, onConfirm }) => {
                     <p className="warning">This action cannot be undone.</p>
                 </div>
                 <div className="buttons">
-                    <button type="button" className="secondary" onClick={onClose}>
+                    <button type="button" className="button secondary" onClick={onClose}>
                         <FaTimes /> Cancel
                     </button>
-                    <button type="button" className="danger" onClick={handleConfirm}>
+                    <button type="button" className="button danger" onClick={handleConfirm}>
                         <FaTrash /> Delete
                     </button>
                 </div>

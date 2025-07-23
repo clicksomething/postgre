@@ -11,7 +11,8 @@ import {
     FaSearch, 
     FaSort, 
     FaSortUp, 
-    FaSortDown 
+    FaSortDown,
+    FaExclamationTriangle
 } from 'react-icons/fa';
 
 const ScheduleDetails = () => {
@@ -26,6 +27,8 @@ const ScheduleDetails = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+    const [overlaps, setOverlaps] = useState([]);
+    const [showOverlaps, setShowOverlaps] = useState(false);
 
     useEffect(() => {
         if (uploadId) {
@@ -133,7 +136,9 @@ const ScheduleDetails = () => {
                 exam.examName.toLowerCase().includes(searchString) ||
                 exam.course.name.toLowerCase().includes(searchString) ||
                 exam.room.number.toLowerCase().includes(searchString) ||
-                formatDate(exam.examDate).toLowerCase().includes(searchString)
+                formatDate(exam.examDate).toLowerCase().includes(searchString) ||
+                (exam.observers.head && exam.observers.head.toLowerCase().includes(searchString)) ||
+                (exam.observers.secretary && exam.observers.secretary.toLowerCase().includes(searchString))
             );
         });
 
@@ -164,6 +169,77 @@ const ScheduleDetails = () => {
         setShowDeleteModal(true);
     };
 
+    const checkForOverlaps = () => {
+        if (!exams || exams.length === 0) {
+            setOverlaps([]);
+            return;
+        }
+
+        const overlapsFound = [];
+        const observerAssignments = new Map(); // observerId -> array of assignments
+
+        // Group assignments by observer
+        exams.forEach(exam => {
+            if (exam.observers.head) {
+                if (!observerAssignments.has(exam.observers.head)) {
+                    observerAssignments.set(exam.observers.head, []);
+                }
+                observerAssignments.get(exam.observers.head).push({
+                    examId: exam.examId,
+                    courseName: exam.course.name,
+                    date: exam.examDate,
+                    startTime: exam.startTime,
+                    endTime: exam.endTime,
+                    role: 'head'
+                });
+            }
+            if (exam.observers.secretary) {
+                if (!observerAssignments.has(exam.observers.secretary)) {
+                    observerAssignments.set(exam.observers.secretary, []);
+                }
+                observerAssignments.get(exam.observers.secretary).push({
+                    examId: exam.examId,
+                    courseName: exam.course.name,
+                    date: exam.examDate,
+                    startTime: exam.startTime,
+                    endTime: exam.endTime,
+                    role: 'secretary'
+                });
+            }
+        });
+
+        // Check for overlaps for each observer
+        observerAssignments.forEach((assignments, observerName) => {
+            for (let i = 0; i < assignments.length; i++) {
+                for (let j = i + 1; j < assignments.length; j++) {
+                    const assignment1 = assignments[i];
+                    const assignment2 = assignments[j];
+
+                    // Check if same date
+                    if (assignment1.date === assignment2.date) {
+                        // Check for time overlap
+                        const start1 = new Date(`1970-01-01T${assignment1.startTime}`);
+                        const end1 = new Date(`1970-01-01T${assignment1.endTime}`);
+                        const start2 = new Date(`1970-01-01T${assignment2.startTime}`);
+                        const end2 = new Date(`1970-01-01T${assignment2.endTime}`);
+
+                        if (start1 < end2 && end1 > start2) {
+                            overlapsFound.push({
+                                observer: observerName,
+                                assignment1,
+                                assignment2,
+                                overlapType: `${assignment1.role} and ${assignment2.role}`
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        setOverlaps(overlapsFound);
+        setShowOverlaps(true);
+    };
+
     if (!examDetails) {
         return <div className="no-data">No schedule information available</div>;
     }
@@ -191,6 +267,13 @@ const ScheduleDetails = () => {
                         </div>
                     </div>
                 </div>
+                <button 
+                    className="check-overlaps-button" 
+                    onClick={checkForOverlaps}
+                    title="Check for overlapping assignments"
+                >
+                    <FaExclamationTriangle /> Check Overlaps
+                </button>
             </div>
 
             <div className="search-bar">
@@ -198,12 +281,58 @@ const ScheduleDetails = () => {
                     <FaSearch className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search exams..."
+                        placeholder="Search exams, courses, rooms, dates, or observer names..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
             </div>
+
+            {showOverlaps && (
+                <div className="overlaps-section">
+                    <div className="overlaps-header">
+                        <h3>Assignment Overlaps</h3>
+                        <button 
+                            className="close-overlaps" 
+                            onClick={() => setShowOverlaps(false)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    {overlaps.length === 0 ? (
+                        <div className="no-overlaps">
+                            ✅ No overlapping assignments found!
+                        </div>
+                    ) : (
+                        <div className="overlaps-list">
+                            <div className="overlaps-summary">
+                                ⚠️ Found {overlaps.length} overlapping assignment(s)
+                            </div>
+                            {overlaps.map((overlap, index) => (
+                                <div key={index} className="overlap-item">
+                                    <div className="overlap-observer">
+                                        <strong>{overlap.observer}</strong> ({overlap.overlapType})
+                                    </div>
+                                    <div className="overlap-details">
+                                        <div className="overlap-exam">
+                                            <span className="exam-name">{overlap.assignment1.courseName}</span>
+                                            <span className="exam-time">
+                                                {formatDate(overlap.assignment1.date)} - {formatTime(overlap.assignment1.startTime)} to {formatTime(overlap.assignment1.endTime)}
+                                            </span>
+                                        </div>
+                                        <div className="overlap-exam">
+                                            <span className="exam-name">{overlap.assignment2.courseName}</span>
+                                            <span className="exam-time">
+                                                {formatDate(overlap.assignment2.date)} - {formatTime(overlap.assignment2.startTime)} to {formatTime(overlap.assignment2.endTime)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <div className="details-content">
                 {exams.length === 0 ? (

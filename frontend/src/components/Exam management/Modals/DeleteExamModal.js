@@ -39,9 +39,6 @@ const DeleteExamModal = ({ exam, onClose, onDelete }) => {
             <div className="modal-content">
                 <div className="modal-header">
                     <h2>Delete Exam</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <FaTimes />
-                    </button>
                 </div>
 
                 <div className="modal-body">
@@ -56,14 +53,14 @@ const DeleteExamModal = ({ exam, onClose, onDelete }) => {
 
                 <div className="modal-actions">
                     <button 
-                        className="cancel-button" 
+                        className="button secondary" 
                         onClick={onClose}
                         disabled={loading}
                     >
                         Cancel
                     </button>
                     <button 
-                        className="delete-button"
+                        className="button danger"
                         onClick={handleDelete}
                         disabled={loading}
                     >

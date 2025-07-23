@@ -516,3 +516,156 @@ tr.exam-row {
         transform: translateX(100%);
     }
 }
+
+// Overlap detection styles
+.check-overlaps-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+    &:hover {
+        background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+.overlaps-section {
+    margin: 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    animation: slideIn 0.3s ease-out;
+
+    .overlaps-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+
+        h3 {
+            margin: 0;
+            color: #c53030;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .close-overlaps {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #c53030;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+
+            &:hover {
+                background-color: rgba(197, 48, 48, 0.1);
+                transform: scale(1.1);
+            }
+        }
+    }
+
+    .no-overlaps {
+        padding: 2rem;
+        text-align: center;
+        color: #38a169;
+        font-size: 1.125rem;
+        font-weight: 500;
+        background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+    }
+
+    .overlaps-list {
+        padding: 1.5rem;
+
+        .overlaps-summary {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            border-radius: 6px;
+            color: #c53030;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .overlap-item {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #fed7d7;
+            border-radius: 6px;
+            background: #fff5f5;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+
+            .overlap-observer {
+                margin-bottom: 0.75rem;
+                padding-bottom: 0.75rem;
+                border-bottom: 1px solid #fed7d7;
+                color: #c53030;
+                font-size: 1rem;
+            }
+
+            .overlap-details {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+
+                .overlap-exam {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.25rem;
+                    padding: 0.75rem;
+                    background: white;
+                    border-radius: 4px;
+                    border-left: 4px solid #f56565;
+
+                    .exam-name {
+                        font-weight: 600;
+                        color: #2d3748;
+                        font-size: 0.95rem;
+                    }
+
+                    .exam-time {
+                        color: #718096;
+                        font-size: 0.875rem;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Update details-header to accommodate the new button
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+
+    .schedule-info {
+        flex: 1;
+        min-width: 0;
+    }
+}

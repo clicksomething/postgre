@@ -246,27 +246,6 @@
     }
   }
 
-  // Button variants matching JS component classes
-  .secondary {
-    background: linear-gradient(135deg, var(--secondary-500), var(--secondary-600));
-    color: var(--text-inverse);
-    box-shadow: var(--shadow-sm);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, var(--secondary-600), var(--secondary-700));
-    }
-  }
-
-  .danger {
-    background: linear-gradient(135deg, var(--error-500), var(--error-600));
-    color: var(--text-inverse);
-    box-shadow: var(--shadow-sm);
-
-    &:hover:not(:disabled) {
-      background: linear-gradient(135deg, var(--error-600), var(--error-700));
-    }
-  }
-
   // Loading state
   .loading {
     opacity: 0.7;

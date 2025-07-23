@@ -13,6 +13,9 @@ router.post('/observers', userObserverController.createObserver); // Create a ne
 router.put('/observers/:id', userObserverController.updateObserver); // Update an observer
 router.delete('/observers/:id', userObserverController.deleteObserver); // Delete an observer
 
+// Bulk delete observers
+router.post('/observers/bulk-delete', userObserverController.bulkDeleteObservers);
+
 // User Routes
 router.post('/create', userObserverController.createUser); // Create a new user
 router.get('/', userObserverController.getUsers);          // Get all users
@@ -50,10 +53,10 @@ router.post('/observers/upload',
         console.log('--- AFTER AUTHORIZE ADMIN ---');
         next();
     },
-    userObserverController.upload.single('file'),
+    userObserverController.upload,
     (req, res, next) => {
         console.log('--- AFTER MULTER UPLOAD ---');
-        console.log('Uploaded File:', req.file);
+        console.log('Uploaded Files:', req.files);
         next();
     },
     userObserverController.uploadObservers

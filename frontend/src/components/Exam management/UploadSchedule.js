@@ -92,16 +92,23 @@ const UploadSchedule = ({ onUploadSuccess }) => {
             setUploading(true);
             setError(null);
 
+            // Show processing phase
+            setUploadProgress(95);
+
             const response = await axios.post('http://localhost:3000/api/exams/upload', data, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     'Authorization': `Bearer ${token}`
                 },
                 onUploadProgress: (progressEvent) => {
-                    const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                    setUploadProgress(progress);
+                    // Show upload progress (file transfer)
+                    const uploadProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    setUploadProgress(Math.min(uploadProgress, 90)); // Reserve 10% for processing
                 }
             });
+
+            // Complete
+            setUploadProgress(100);
 
             onUploadSuccess(response.data);
             setFile(null);
@@ -192,6 +199,29 @@ const UploadSchedule = ({ onUploadSuccess }) => {
                         <FaFile className="file-icon" />
                         <p className="file-name">{file.name}</p>
                         <div className="file-actions">
+                            {uploading && (
+                                <div className="upload-progress-details">
+                                    <div className="progress-item">
+                                        <span>Upload:</span>
+                                        <div className="progress-bar">
+                                            <div 
+                                                className="progress-fill" 
+                                                style={{ width: `${Math.min(uploadProgress, 90)}%` }}
+                                            />
+                                        </div>
+                                        <span>{Math.min(uploadProgress, 90)}%</span>
+                                    </div>
+                                    {uploadProgress >= 90 && (
+                                        <div className="progress-item">
+                                            <span>Processing:</span>
+                                            <div className="progress-bar">
+                                                <div className="progress-fill processing" />
+                                            </div>
+                                            <span>Processing...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             <button 
                                 className="upload-button"
                                 onClick={handleUpload}
@@ -200,7 +230,11 @@ const UploadSchedule = ({ onUploadSuccess }) => {
                                 {uploading ? (
                                     <>
                                         <FaSpinner className="spinner" />
-                                        Uploading... {uploadProgress}%
+                                        {uploadProgress >= 90 ? (
+                                            <>Processing... {uploadProgress}%</>
+                                        ) : (
+                                            <>Uploading... {uploadProgress}%</>
+                                        )}
                                     </>
                                 ) : (
                                     <>

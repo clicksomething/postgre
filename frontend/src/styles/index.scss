@@ -148,6 +148,45 @@ button {
   }
 }
 
+// Shared button utility classes for use anywhere
+.button.primary {
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+  color: white;
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  transition: all var(--transition-base);
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    transform: translateY(-1px);
+  }
+}
+.button.secondary {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  &:hover {
+    background: var(--bg-primary); // keep white on hover
+    color: var(--text-primary);
+  }
+}
+.button.danger {
+  background: linear-gradient(135deg, var(--error-500), var(--error-600));
+  color: white;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--error-600), var(--error-700));
+    transform: translateY(-1px);
+  }
+}
+
 // Input base styles
 input, textarea, select {
   font-family: inherit;

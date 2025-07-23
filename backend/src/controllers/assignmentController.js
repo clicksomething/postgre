@@ -1,5 +1,6 @@
 const AssignmentService = require('../services/assignmentService');
 const GeneticAssignmentService = require('../services/geneticAssignmentService');
+const LinearProgrammingAssignmentService = require('../services/linearProgrammingAssignmentService');
 const { client } = require('../../database/db');
 const jwt = require('jsonwebtoken');
 const fs = require('fs').promises;
@@ -434,6 +435,71 @@ const assignmentController = {
         }
     },
 
+    // Assign observers using linear programming (lexicographic)
+    assignObserversWithLP: async (req, res) => {
+        try {
+            const { scheduleId } = req.params;
+
+            // Get all exam IDs for this schedule
+            const examsResult = await client.query(
+                `SELECT ExamID FROM ExamSchedule WHERE ScheduleID = $1`,
+                [scheduleId]
+            );
+
+            if (examsResult.rows.length === 0) {
+                return res.status(404).json({ message: 'No exams found for this schedule' });
+            }
+
+            const examIds = examsResult.rows.map(row => row.examid);
+
+            // Create LP service
+            console.log('[LP] Starting linear programming assignment...');
+            
+            const lpService = new LinearProgrammingAssignmentService();
+
+            // Run the LP algorithm synchronously to prevent race conditions
+            try {
+                console.log('[LP] Running linear programming algorithm...');
+                const result = await lpService.assignObserversWithLP(examIds);
+                
+                console.log('[LP] Linear programming algorithm completed successfully');
+                console.log('[LP] Results:', {
+                    totalExams: result.successful.length + result.failed.length,
+                    assignedExams: result.successful.length,
+                    failedExams: result.failed.length,
+                    fitness: result.performance.finalFitness
+                });
+                
+                // Send success response
+                res.json({
+                    message: "Linear programming algorithm completed successfully",
+                    scheduleId: scheduleId,
+                    algorithm: 'linear_programming_lexicographic',
+                    status: 'completed',
+                    results: {
+                        totalExams: result.successful.length + result.failed.length,
+                        assignedExams: result.successful.length,
+                        failedExams: result.failed.length,
+                        successRate: ((result.successful.length / (result.successful.length + result.failed.length)) * 100).toFixed(1) + '%'
+                    }
+                });
+            } catch (error) {
+                console.error('[LP] Error in linear programming algorithm:', error);
+                res.status(500).json({ 
+                    message: 'Error in linear programming algorithm',
+                    error: error.message 
+                });
+            }
+
+        } catch (error) {
+            console.error('[LP] Error in linear programming assignment:', error);
+            res.status(500).json({ 
+                message: 'Error starting linear programming algorithm',
+                error: error.message 
+            });
+        }
+    },
+
     // Run both algorithms and compare
     runAndCompareAlgorithms: async (req, res) => {
         try {
@@ -506,7 +572,7 @@ const assignmentController = {
             const randomResult = await AssignmentService.assignObserversToExam(examIds);
             const randomEndTime = Date.now();
             
-            // Save random algorithm state
+            // Save random assignments
             const randomAssignments = await client.query(
                 'SELECT * FROM ExamAssignment WHERE ExamID = ANY($1)',
                 [examIds]

@@ -113,9 +113,6 @@ const EditExamModal = ({ exam, onClose, onUpdate }) => {
             <div className="modal-content">
                 <div className="modal-header">
                     <h2>Edit Exam</h2>
-                    <button className="close-button" onClick={onClose}>
-                        <FaTimes />
-                    </button>
                 </div>
 
                 {error && <div className="error-message">{error}</div>}

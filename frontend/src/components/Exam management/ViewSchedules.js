@@ -5,6 +5,7 @@ import EditScheduleModal from './Modals/EditScheduleModal';
 import './ViewSchedules.scss';
 import { useNavigate } from 'react-router-dom';
 import DataTable from '../common/DataTable';
+import DeleteScheduleModal from './Modals/DeleteScheduleModal';
 
 const ViewSchedules = ({ onScheduleSelect }) => {
     const [schedules, setSchedules] = useState([]);
@@ -17,6 +18,8 @@ const ViewSchedules = ({ onScheduleSelect }) => {
     const [schedulesPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
     const navigate = useNavigate();
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [scheduleToDelete, setScheduleToDelete] = useState(null);
     
     useEffect(() => {
         fetchSchedules();
@@ -47,25 +50,36 @@ const ViewSchedules = ({ onScheduleSelect }) => {
         }
     };
 
-    const handleDelete = async (scheduleId) => {
-        if (window.confirm('Are you sure you want to delete this schedule?')) {
-            try {
-                const token = localStorage.getItem('authToken');
-                if (!token) {
-                    throw new Error('Not authorized');
-                }
+    const handleDelete = (scheduleId) => {
+        setScheduleToDelete(scheduleId);
+        setShowDeleteModal(true);
+    };
 
-                await axios.delete(`http://localhost:3000/api/exams/schedules/${scheduleId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                await fetchSchedules();
-            } catch (err) {
-                setError(err.response?.data?.message || 'Error deleting schedule');
+    const confirmDelete = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Not authorized');
             }
+            await axios.delete(`http://localhost:3000/api/exams/schedules/${scheduleToDelete}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            await fetchSchedules();
+            setShowDeleteModal(false);
+            setScheduleToDelete(null);
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error deleting schedule');
+            setShowDeleteModal(false);
+            setScheduleToDelete(null);
         }
+    };
+
+    const cancelDelete = () => {
+        setShowDeleteModal(false);
+        setScheduleToDelete(null);
     };
 
     const handleViewDetails = (uploadId) => {
@@ -259,6 +273,12 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                         setSelectedSchedule(null);
                     }}
                     onUpdate={handleUpdateSuccess}
+                />
+            )}
+            {showDeleteModal && (
+                <DeleteScheduleModal
+                    onConfirm={confirmDelete}
+                    onCancel={cancelDelete}
                 />
             )}
         </div>

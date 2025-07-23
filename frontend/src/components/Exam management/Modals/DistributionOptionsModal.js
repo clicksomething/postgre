@@ -5,7 +5,8 @@ import {
     FaTimes,
     FaChartLine,
     FaCog,
-    FaArrowLeft
+    FaArrowLeft,
+    FaCalculator
 } from 'react-icons/fa';
 import './DistributionOptionsModal.scss';
 
@@ -41,6 +42,19 @@ const DistributionOptionsModal = ({ schedule, onClose, onSelectAlgorithm }) => {
                 'Considers observer expertise and availability',
                 'Minimizes conflicts and maximizes efficiency',
                 'Iteratively improves assignment quality'
+            ]
+        },
+        {
+            id: 'linear-programming',
+            name: 'Linear Programming (Lexicographic)',
+            description: 'Find optimal solution using mathematical optimization',
+            icon: <FaCalculator />,
+            constraints: [
+                'Guarantees optimal coverage (100% if feasible)',
+                'Maximizes workload balance given coverage',
+                'Maximizes fairness given coverage and workload',
+                'Fast execution (seconds vs minutes)',
+                'Mathematically optimal solution'
             ]
         },
         {
@@ -100,9 +114,7 @@ const DistributionOptionsModal = ({ schedule, onClose, onSelectAlgorithm }) => {
                             <FaArrowLeft />
                         </button>
                         <h2>Genetic Algorithm Parameters</h2>
-                        <button className="close-btn" onClick={onClose}>
-                            <FaTimes />
-                        </button>
+                        {/* Remove the close (X) button */}
                     </div>
                     
                     <p className="schedule-info">
@@ -252,35 +264,33 @@ const DistributionOptionsModal = ({ schedule, onClose, onSelectAlgorithm }) => {
             <div className="distribution-options-modal">
                 <div className="modal-header">
                     <h2>Distribution Algorithms</h2>
-                    <button className="close-btn" onClick={onClose}>
-                        <FaTimes />
-                    </button>
+                    {/* Remove the close (X) button */}
                 </div>
                 
-                <p className="schedule-info">
-                    Schedule: {schedule.academicYear} - {schedule.semester} {schedule.examType}
-                </p>
-                <p className="schedule-exams-info">
-                    Total Exams: {schedule.totalExams} | Unassigned: {schedule.totalExams - schedule.assignedExams}
-                </p>
+                    <p className="schedule-info">
+                        Schedule: {schedule.academicYear} - {schedule.semester} {schedule.examType}
+                    </p>
+                    <p className="schedule-exams-info">
+                        Total Exams: {schedule.totalExams} | Unassigned: {schedule.totalExams - schedule.assignedExams}
+                    </p>
 
-                {distributionAlgorithms.map((algorithm) => (
-                    <div 
-                        key={algorithm.id} 
-                        className="algorithm-option"
+                        {distributionAlgorithms.map((algorithm) => (
+                            <div 
+                                key={algorithm.id} 
+                                className="algorithm-option"
                         onClick={() => handleAlgorithmSelect(algorithm.id)}
-                    >
+                            >
                         {algorithm.icon}
-                        <h3>{algorithm.name}</h3>
-                        <p>{algorithm.description}</p>
-                        <strong>Constraints:</strong>
-                        <ul>
-                            {algorithm.constraints.map((constraint, index) => (
-                                <li key={index}>{constraint}</li>
-                            ))}
-                        </ul>
-                    </div>
-                ))}
+                                    <h3>{algorithm.name}</h3>
+                                    <p>{algorithm.description}</p>
+                                        <strong>Constraints:</strong>
+                                        <ul>
+                                            {algorithm.constraints.map((constraint, index) => (
+                                                <li key={index}>{constraint}</li>
+                                            ))}
+                                        </ul>
+                            </div>
+                        ))}
             </div>
         </div>
     );

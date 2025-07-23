@@ -25,7 +25,7 @@ const EditUserModal = ({ user, onClose, onSave, isSaving }) => {
     return (
         <div className="edit-user-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
+                <button className="button secondary close-button" onClick={onClose}>
                     <FaTimes />
                 </button>
                 <h2>Edit User</h2>
@@ -78,10 +78,10 @@ const EditUserModal = ({ user, onClose, onSave, isSaving }) => {
                         />
                     </div>
                     <div className="buttons">
-                        <button type="submit" className="primary" disabled={isSaving}>
+                        <button type="submit" className="button primary" disabled={isSaving}>
                             <FaSave /> {isSaving ? 'Saving...' : 'Save Changes'}
                         </button>
-                        <button type="button" className="secondary" onClick={onClose}>
+                        <button type="button" className="button secondary" onClick={onClose}>
                             <FaTimes /> Cancel
                         </button>
                     </div>

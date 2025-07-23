@@ -57,9 +57,6 @@ const AssignObserversModal = ({
     return (
         <div className="assign-observers-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </button>
                 <h2>Assign Observers</h2>
                 <div className="exam-details">
                     <p><strong>Exam:</strong> {examId}</p>

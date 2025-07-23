@@ -87,6 +87,9 @@ const AssignmentsView = () => {
                 
                 console.log('[Frontend] Sending genetic algorithm parameters:', requestBody);
                 
+            } else if (algorithmId === 'linear-programming') {
+                endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/assign-lp`;
+                console.log('[Frontend] Starting linear programming algorithm');
 
             } else if (algorithmId === 'compare') {
                 endpoint = `http://localhost:3000/api/assignments/schedules/${selectedSchedule.scheduleId}/compare-algorithms`;
@@ -137,7 +140,7 @@ const AssignmentsView = () => {
                         
                         if (currentSchedule && currentSchedule.assignedExams > 0) {
                             // Algorithm has completed and applied results
-                            alert(`Genetic Algorithm Distribution Complete!\n` +
+                alert(`Genetic Algorithm Distribution Complete!\n` +
                                   `Total Exams: ${currentSchedule.totalExams}\n` +
                                   `Successful Assignments: ${currentSchedule.assignedExams}\n` +
                                   `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
@@ -151,6 +154,51 @@ const AssignmentsView = () => {
                         
                         // If not complete, poll again in 3 seconds
                         setTimeout(pollForCompletion, 3000);
+                    } catch (error) {
+                        console.error('Error polling for completion:', error);
+                        alert('Error checking algorithm completion status. Please refresh the page to see results.');
+                    }
+                };
+                
+                // Start polling
+                pollForCompletion();
+            } else if (algorithmId === 'linear-programming') {
+                // Show initial message that algorithm has started
+                alert('Linear programming algorithm has started running in the background. This should complete quickly. You will be notified when it completes.');
+                
+                // Poll for completion status
+                const pollForCompletion = async () => {
+                    try {
+                        // Wait a bit before first check
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                        // Check if assignments have been updated
+                        const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
+                            headers: { 
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        
+                        // Find the current schedule
+                        const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
+                        
+                        if (currentSchedule && currentSchedule.assignedExams > 0) {
+                            // Algorithm has completed and applied results
+                            alert(`Linear Programming Algorithm Distribution Complete!\n` +
+                                  `Total Exams: ${currentSchedule.totalExams}\n` +
+                                  `Successful Assignments: ${currentSchedule.assignedExams}\n` +
+                                  `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
+                                  `Status: ${currentSchedule.assignmentStatus}`
+                            );
+                            
+                            // Refresh the data
+                            fetchScheduleAssignments();
+                            return;
+                        }
+                        
+                        // If not complete, poll again in 1 second (LP should be fast)
+                        setTimeout(pollForCompletion, 1000);
                     } catch (error) {
                         console.error('Error polling for completion:', error);
                         alert('Error checking algorithm completion status. Please refresh the page to see results.');

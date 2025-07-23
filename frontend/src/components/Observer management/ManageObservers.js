@@ -6,9 +6,10 @@ import CreateObserverModal from './CreateObserverModal';
 import EditTimeSlotModal from './EditTimeSlotModal';
 import AddTimeSlotModal from './AddTimeSlotModal';
 import UploadObservers from './UploadObservers';
-import { FaPlus, FaEdit, FaTrash, FaUser, FaUpload } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaUser, FaUpload, FaCheckSquare, FaRegSquare, FaTimes } from 'react-icons/fa';
 import SuccessMessage from '../SuccessMessage';
 import DeleteObserverModal from './DeleteObserverModal';
+import ReactModal from 'react-modal';
 import DataTable from '../common/DataTable';
 
 
@@ -30,6 +31,8 @@ const ManageObservers = () => {
     const [successMessages, setSuccessMessages] = useState([]);
     const [deletingObserver, setDeletingObserver] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [selectedObserverIds, setSelectedObserverIds] = useState([]);
+    const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
     const handleDeleteClick = (observer) => {
         setDeletingObserver(observer);
     };
@@ -246,8 +249,74 @@ const ManageObservers = () => {
 
     const handleUploadSuccess = async (data) => {
         await fetchObservers();
-        setSuccessMessages(['Observers uploaded successfully']);
+        
+        // Handle multi-file upload response
+        const messages = [];
+        if (data.summary) {
+            const { totalFiles, filesSuccessful, filesFailed, totalObserversCreated, totalObserversSkipped } = data.summary;
+            
+            if (totalObserversCreated > 0) {
+                messages.push(`${totalObserversCreated} observers created successfully`);
+            }
+            if (totalObserversSkipped > 0) {
+                messages.push(`${totalObserversSkipped} observers skipped (already exist)`);
+            }
+            if (filesSuccessful > 0) {
+                messages.push(`${filesSuccessful} of ${totalFiles} files processed successfully`);
+            }
+            if (filesFailed > 0) {
+                messages.push(`${filesFailed} files failed to process`);
+            }
+        } else {
+            messages.push('Observers uploaded successfully');
+        }
+        
+        setSuccessMessages(messages);
         setIsUploading(false);
+    };
+
+    const handleSelectObserver = (observerId) => {
+        setSelectedObserverIds((prev) =>
+            prev.includes(observerId)
+                ? prev.filter((id) => id !== observerId)
+                : [...prev, observerId]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedObserverIds.length === sortedObservers.length) {
+            setSelectedObserverIds([]);
+        } else {
+            setSelectedObserverIds(sortedObservers.map((o) => o.observerID));
+        }
+    };
+
+    const handleBulkDeleteClick = () => {
+        setShowBulkDeleteModal(true);
+    };
+
+    const handleCloseBulkDeleteModal = () => {
+        setShowBulkDeleteModal(false);
+    };
+
+    const handleConfirmBulkDelete = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            await axios.post('http://localhost:3000/api/users/observers/bulk-delete', {
+                observerIds: selectedObserverIds
+            }, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            await fetchObservers();
+            setSuccessMessages(['Selected observers deleted successfully']);
+            setSelectedObserverIds([]);
+            setShowBulkDeleteModal(false);
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error deleting selected observers');
+            setShowBulkDeleteModal(false);
+        }
     };
 
     const sortedObservers = useMemo(() => {
@@ -338,6 +407,26 @@ const ManageObservers = () => {
 
     const columns = [
         {
+            key: 'select',
+            label: (
+                <input
+                    type="checkbox"
+                    checked={selectedObserverIds.length === sortedObservers.length && sortedObservers.length > 0}
+                    onChange={handleSelectAll}
+                    aria-label="Select all observers"
+                />
+            ),
+            sortable: false,
+            render: (observer) => (
+                <input
+                    type="checkbox"
+                    checked={selectedObserverIds.includes(observer.observerID)}
+                    onChange={() => handleSelectObserver(observer.observerID)}
+                    aria-label={`Select observer ${observer.name}`}
+                />
+            ),
+        },
+        {
             key: 'title',
             label: 'Title',
             sortable: true
@@ -400,6 +489,14 @@ const ManageObservers = () => {
 
     const actionButtons = [
         {
+            icon: <FaTrash />,
+            text: '',
+            className: 'bulk-delete-button',
+            tooltip: 'Delete selected observers',
+            onClick: handleBulkDeleteClick,
+            disabled: selectedObserverIds.length === 0,
+        },
+        {
             icon: <FaPlus />,
             text: '',
             className: 'create-button',
@@ -418,6 +515,15 @@ const ManageObservers = () => {
     return (
         <div className="manage-observers-page-wrapper">
             <h1>Manage Observers</h1>
+            {selectedObserverIds.length > 0 && (
+                <button
+                    className="bulk-delete-button"
+                    onClick={handleBulkDeleteClick}
+                    disabled={selectedObserverIds.length === 0}
+                >
+                    <FaTrash /> Delete Selected ({selectedObserverIds.length})
+                </button>
+            )}
             <DataTable
                 data={sortedObservers}
                 columns={columns}
@@ -486,6 +592,32 @@ const ManageObservers = () => {
                 messages={successMessages}
                 onClose={handleCloseMessage}
             />
+
+            {/* Bulk Delete Modal */}
+            <ReactModal
+                isOpen={showBulkDeleteModal}
+                onRequestClose={handleCloseBulkDeleteModal}
+                contentLabel="Confirm Bulk Delete"
+                className="delete-observer-modal"
+                overlayClassName="modal-overlay"
+                ariaHideApp={false}
+            >
+                <div className="modal-content">
+                    <h2>Delete Selected Observers</h2>
+                    <div className="confirmation-text">
+                        <p>Are you sure you want to delete the selected {selectedObserverIds.length} observers?</p>
+                        <p className="warning">This action cannot be undone.</p>
+                    </div>
+                    <div className="buttons">
+                        <button type="button" className="button secondary" onClick={handleCloseBulkDeleteModal}>
+                            <FaTimes /> Cancel
+                        </button>
+                        <button type="button" className="button danger" onClick={handleConfirmBulkDelete}>
+                            <FaTrash /> Delete
+                        </button>
+                    </div>
+                </div>
+            </ReactModal>
         </div>
     );
 };

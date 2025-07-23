@@ -31,9 +31,6 @@ const AddTimeSlotModal = ({ observerID, day, onClose, onSave }) => {
     return (
         <div className="add-time-slot-modal">
             <div className="modal-content">
-                <span className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </span>
                 <h2>Add Time Slot</h2>
                 <div className="form-group">
                     <label htmlFor="startTime">Start Time:</label>
@@ -53,9 +50,12 @@ const AddTimeSlotModal = ({ observerID, day, onClose, onSave }) => {
                         onChange={(e) => setEndTime(e.target.value)}
                     />
                 </div>
-                <button className="save-button" onClick={handleSubmit}>
-                    <FaSave /> Save
-                </button>
+                <div className="button-container">
+                    <button className="button secondary" onClick={onClose}>Cancel</button>
+                    <button className="button primary" onClick={handleSubmit}>
+                        <FaSave /> Save
+                    </button>
+                </div>
             </div>
         </div>
     );

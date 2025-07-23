@@ -8,6 +8,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const crypto = require('crypto');
 const { parseTimeSlot, validateAndFormatTime } = require('../utils/timeSlotParser');
+const { smartTranslate } = require('../utils/translationService');
 
 const fileFilter = (req, file, cb) => {
   // Mimetypes for Excel files (.xlsx, .xls)
@@ -26,7 +27,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: fileFilter,
-});
+}).array('files', 10); // Allow up to 10 files
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -676,39 +677,153 @@ const deleteObserver = async (req, res) => {
   }
 };
 
+// Bulk delete observers
+const bulkDeleteObservers = async (req, res) => {
+  const { observerIds } = req.body;
+  if (!Array.isArray(observerIds) || observerIds.length === 0) {
+    return res.status(400).json({ message: 'observerIds must be a non-empty array' });
+  }
+
+  const deleted = [];
+  const errors = [];
+  const client = require('../../database/db').client;
+
+  try {
+    await client.query('BEGIN');
+    for (const id of observerIds) {
+      try {
+        // 1. Find the associated AppUser and UserInfo IDs
+        const userInfoResult = await client.query(`
+          SELECT o.u_id as user_info_id, o.u_id as app_user_id
+          FROM observer o
+          WHERE o.observerid = $1
+        `, [id]);
+
+        if (userInfoResult.rows.length === 0) {
+          errors.push({ id, error: 'Observer not found' });
+          continue;
+        }
+
+        const { user_info_id, app_user_id } = userInfoResult.rows[0];
+
+        // 2. Remove the observer from ExamAssignment
+        await client.query(`
+          DELETE FROM examassignment 
+          WHERE observerid = $1
+        `, [id]);
+
+        // 3. Update ExamSchedule to remove references to this observer
+        await client.query(`
+          UPDATE examschedule 
+          SET examhead = NULL, 
+              examsecretary = NULL, 
+              status = 'unassigned'
+          WHERE examhead = $1 OR examsecretary = $1
+        `, [id]);
+
+        // 4. Delete associated TimeSlots
+        await client.query(`
+          DELETE FROM timeslot
+          WHERE observerid = $1
+        `, [id]);
+
+        // 5. Delete associated Preferences
+        await client.query(`
+          DELETE FROM preferences
+          WHERE observerid = $1
+        `, [id]);
+
+        // 6. Delete the observer
+        await client.query(`
+          DELETE FROM observer WHERE observerid = $1
+        `, [id]);
+
+        // 7. Delete the AppUser 
+        await client.query(`
+          DELETE FROM appuser 
+          WHERE userid = $1
+        `, [user_info_id]);
+        
+        // 8. Delete the UserInfo
+        await client.query(`
+          DELETE FROM userinfo 
+          WHERE id = $1
+        `, [user_info_id]);
+
+        deleted.push(id);
+      } catch (err) {
+        errors.push({ id, error: err.message });
+      }
+    }
+    await client.query('COMMIT');
+    res.status(200).json({ message: 'Bulk observer deletion complete', deleted, errors });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ message: 'Bulk deletion failed', error: err.message });
+  }
+};
+
 const uploadObservers = async (req, res) => {
     console.log('--- UPLOAD OBSERVERS START ---');
     console.log('Request User:', req.user);
     console.log('Request Headers:', req.headers);
-    console.log('Request File:', req.file);
+    console.log('Request Files:', req.files);
 
-    if (!req.file) {
-        console.log('No file uploaded');
-        return res.status(400).json({ message: "No Excel file uploaded." });
+    if (!req.files || req.files.length === 0) {
+        console.log('No files uploaded');
+        return res.status(400).json({ message: "No Excel files uploaded." });
     }
 
-    const summary = {
-        observersCreated: 0,
-        timeSlotsCreated: 0,
-        observersSkipped: 0,
+    const overallSummary = {
+        totalFiles: req.files.length,
+        filesProcessed: 0,
+        filesSuccessful: 0,
+        filesFailed: 0,
+        totalObserversCreated: 0,
+        totalTimeSlotsCreated: 0,
+        totalObserversSkipped: 0,
+        fileResults: [],
         errors: [],
         parseErrors: [],
     };
 
     try {
-        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        if (!sheetName) throw new Error("The uploaded Excel file contains no sheets.");
-        
-        const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-        console.log("--- FULL EXCEL DATA ---");
-        console.log(JSON.stringify(results, null, 2));
-        console.log("-----------------------");
 
         const roleResult = await client.query(`SELECT "roleid" FROM "roles" WHERE "rolename" = 'observer'`);
         const observerRoleId = roleResult.rows[0]?.roleid;
         if (!observerRoleId) throw new Error("The 'observer' role was not found.");
+
+        // Process each file sequentially
+        for (const [fileIndex, file] of req.files.entries()) {
+            console.log(`--- PROCESSING FILE ${fileIndex + 1}/${req.files.length}: ${file.originalname} ---`);
+            
+            const fileSummary = {
+                fileName: file.originalname,
+                observersCreated: 0,
+                timeSlotsCreated: 0,
+                observersSkipped: 0,
+                errors: [],
+                parseErrors: [],
+                status: 'processing'
+            };
+
+            try {
+                const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+                const sheetName = workbook.SheetNames[0];
+                if (!sheetName) {
+                    throw new Error("The uploaded Excel file contains no sheets.");
+                }
+                
+                const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+                console.log(`--- FILE ${fileIndex + 1} EXCEL DATA ---`);
+                console.log(JSON.stringify(results, null, 2));
+                console.log("-----------------------");
+
+                // Validate input before processing
+                if (results.length === 0) {
+                    throw new Error("The uploaded Excel file is empty.");
+                }
 
         // Comprehensive mapping for titles and scientific ranks
         const titleMappings = {
@@ -760,8 +875,8 @@ const uploadObservers = async (req, res) => {
             'Research Assistant': 'Research Assistant',
         };
 
-        // Mapping functions with robust handling
-        const mapTitle = (title) => {
+        // Mapping functions with smart translation fallback
+        const mapTitle = async (title) => {
             if (!title) return '';
             
             // Normalize the title: trim, remove extra whitespace, and handle Arabic variations
@@ -771,13 +886,17 @@ const uploadObservers = async (req, res) => {
             
             // Try mapping with original title first
             let mappedTitle = titleMappings[title.trim()] || 
-                              titleMappings[normalizedTitle] || 
-                              normalizedTitle;
+                              titleMappings[normalizedTitle];
             
-            return mappedTitle;
+            // If no mapping found, use smart translation
+            if (!mappedTitle) {
+                mappedTitle = await smartTranslate(title, titleMappings, 'title');
+            }
+            
+            return mappedTitle || normalizedTitle;
         };
 
-        const mapScientificRank = (rank) => {
+        const mapScientificRank = async (rank) => {
             if (!rank) return '';
             
             // Normalize the rank: trim, remove extra whitespace, and handle Arabic variations
@@ -787,10 +906,14 @@ const uploadObservers = async (req, res) => {
             
             // Try mapping with original rank first
             let mappedRank = scientificRankMappings[rank.trim()] || 
-                             scientificRankMappings[normalizedRank] || 
-                             normalizedRank;
+                             scientificRankMappings[normalizedRank];
             
-            return mappedRank;
+            // If no mapping found, use smart translation
+            if (!mappedRank) {
+                mappedRank = await smartTranslate(rank, scientificRankMappings, 'rank');
+            }
+            
+            return mappedRank || normalizedRank;
         };
 
         // Flexible header mapping function
@@ -829,15 +952,15 @@ const uploadObservers = async (req, res) => {
             throw new Error("The uploaded Excel file is empty.");
         }
 
-        // Process each row in a way that stops on first error
-        for (const [index, row] of results.entries()) {
-            const rowNum = index + 2; // Excel rows start at 2
-            
-            try {
-                await client.query('BEGIN');
-                
-                console.log(`--- PROCESSING ROW ${rowNum} ---`);
-                console.log('Raw Row Data:', JSON.stringify(row, null, 2));
+                // Process each row in the file
+                for (const [index, row] of results.entries()) {
+                    const rowNum = index + 2; // Excel rows start at 2
+                    
+                    try {
+                        await client.query('BEGIN');
+                        
+                        console.log(`--- PROCESSING ROW ${rowNum} IN FILE ${fileIndex + 1} ---`);
+                        console.log('Raw Row Data:', JSON.stringify(row, null, 2));
 
                 // Detailed mapping with extensive logging
                 const mappedRow = {};
@@ -858,10 +981,10 @@ const uploadObservers = async (req, res) => {
                 }
 
                 // Map titles and scientific ranks
-                const mappedTitle = mapTitle(mappedRow.title || '');
-                const mappedScientificRank = mapScientificRank(mappedRow.scientificRank || '');
+                const mappedTitle = await mapTitle(mappedRow.title || '');
+                const mappedScientificRank = await mapScientificRank(mappedRow.scientificRank || '');
 
-                // Availability mapping with more comprehensive options
+                // Availability mapping with smart translation fallback
                 const availabilityMapping = {
                     'جزئي': 'part-time',
                     'كامل': 'full-time',
@@ -869,7 +992,11 @@ const uploadObservers = async (req, res) => {
                     'part-time': 'part-time',
                     'full-time': 'full-time'
                 };
-                const mappedAvailability = availabilityMapping[mappedRow.availability?.trim()] || 'part-time';
+                
+                let mappedAvailability = availabilityMapping[mappedRow.availability?.trim()];
+                if (!mappedAvailability) {
+                    mappedAvailability = await smartTranslate(mappedRow.availability, availabilityMapping, 'availability') || 'part-time';
+                }
 
                 console.log('Mapped Details:');
                 console.log('Title:', mappedTitle);
@@ -901,7 +1028,7 @@ const uploadObservers = async (req, res) => {
                 if (existingObserver.rows.length > 0) {
                     const existing = existingObserver.rows[0];
                     console.log(`Skipping existing observer: "${mappedRow.name}" (ID: ${existing.observerid})`);
-                    summary.observersSkipped++;
+                    fileSummary.observersSkipped++;
                     await client.query('ROLLBACK');
                     continue; // Skip to next row
                 }
@@ -978,7 +1105,7 @@ const uploadObservers = async (req, res) => {
                                  VALUES ($1, $2, $3, $4)`,
                                 [newObserverId, capitalizedDay, '08:00', '16:30']
                             );
-                            summary.timeSlotsCreated++;
+                            fileSummary.timeSlotsCreated++;
                             console.log(`Inserted full day time slot for ${englishDay}`);
                         } else if (typeof normalizedDayValue === 'string' && 
                                    (normalizedDayValue.includes('-') || 
@@ -999,7 +1126,7 @@ const uploadObservers = async (req, res) => {
                                      VALUES ($1, $2, $3, $4)`,
                                     [newObserverId, capitalizedDay, startTime, endTime]
                                 );
-                                summary.timeSlotsCreated++;
+                                fileSummary.timeSlotsCreated++;
                                 console.log('Parsed and Inserted Time Slot:', {
                                     observerId: newObserverId,
                                     day: englishDay,
@@ -1008,7 +1135,7 @@ const uploadObservers = async (req, res) => {
                                 });
                             } catch (parseError) {
                                 console.error(`Error parsing time slot for ${englishDay}:`, parseError);
-                                summary.parseErrors.push({
+                                fileSummary.parseErrors.push({
                                     day: englishDay,
                                     value: normalizedDayValue,
                                     error: parseError.message
@@ -1019,54 +1146,107 @@ const uploadObservers = async (req, res) => {
                 }
 
                 await client.query('COMMIT');
-                summary.observersCreated++;
+                fileSummary.observersCreated++;
                 console.log(`Successfully created observer: ${mappedRow.name}`);
             } catch (rowError) {
                 // Rollback the transaction
                 await client.query('ROLLBACK');
                 
                 // Log the detailed error
-                console.error(`Error processing row ${rowNum}:`, rowError);
+                console.error(`Error processing row ${rowNum} in file ${fileIndex + 1}:`, rowError);
                 
-                // Add the error to the summary
-                summary.errors.push({ 
+                // Add the error to the file summary
+                fileSummary.errors.push({ 
                     row: rowNum, 
                     message: rowError.message 
                 });
 
                 // Continue processing other rows instead of stopping
-                console.log(`Continuing with next row after error in row ${rowNum}`);
+                console.log(`Continuing with next row after error in row ${rowNum} of file ${fileIndex + 1}`);
             }
+                }
+
+                // Update file summary status
+                const hasFileErrors = fileSummary.errors.length > 0 || fileSummary.parseErrors.length > 0;
+                const hasFileSuccess = fileSummary.observersCreated > 0;
+                
+                if (hasFileErrors && !hasFileSuccess) {
+                    fileSummary.status = 'failed';
+                    overallSummary.filesFailed++;
+                } else if (hasFileErrors && hasFileSuccess) {
+                    fileSummary.status = 'partial';
+                    overallSummary.filesSuccessful++;
+                } else {
+                    fileSummary.status = 'success';
+                    overallSummary.filesSuccessful++;
+                }
+
+                // Update overall summary
+                overallSummary.totalObserversCreated += fileSummary.observersCreated;
+                overallSummary.totalTimeSlotsCreated += fileSummary.timeSlotsCreated;
+                overallSummary.totalObserversSkipped += fileSummary.observersSkipped;
+                overallSummary.errors.push(...fileSummary.errors);
+                overallSummary.parseErrors.push(...fileSummary.parseErrors);
+
+                console.log(`--- FILE ${fileIndex + 1} SUMMARY ---`);
+                console.log('File:', fileSummary.fileName);
+                console.log('Status:', fileSummary.status);
+                console.log('Observers Created:', fileSummary.observersCreated);
+                console.log('Observers Skipped:', fileSummary.observersSkipped);
+                console.log('Time Slots Created:', fileSummary.timeSlotsCreated);
+                console.log('Errors:', fileSummary.errors);
+                console.log('Parse Errors:', fileSummary.parseErrors);
+
+            } catch (fileError) {
+                console.error(`Fatal error processing file ${fileIndex + 1} (${file.originalname}):`, fileError);
+                
+                fileSummary.status = 'failed';
+                fileSummary.errors.push({ 
+                    message: fileError.message 
+                });
+                
+                overallSummary.filesFailed++;
+                overallSummary.errors.push({
+                    file: file.originalname,
+                    message: fileError.message
+                });
+            }
+
+            overallSummary.filesProcessed++;
+            overallSummary.fileResults.push(fileSummary);
         }
 
-        console.log('--- UPLOAD SUMMARY ---');
-        console.log('Observers Created:', summary.observersCreated);
-        console.log('Observers Skipped:', summary.observersSkipped);
-        console.log('Time Slots Created:', summary.timeSlotsCreated);
-        console.log('Errors:', summary.errors);
-        console.log('Parse Errors:', summary.parseErrors);
+        console.log('--- OVERALL UPLOAD SUMMARY ---');
+        console.log('Total Files:', overallSummary.totalFiles);
+        console.log('Files Processed:', overallSummary.filesProcessed);
+        console.log('Files Successful:', overallSummary.filesSuccessful);
+        console.log('Files Failed:', overallSummary.filesFailed);
+        console.log('Total Observers Created:', overallSummary.totalObserversCreated);
+        console.log('Total Observers Skipped:', overallSummary.totalObserversSkipped);
+        console.log('Total Time Slots Created:', overallSummary.totalTimeSlotsCreated);
+        console.log('File Results:', overallSummary.fileResults);
 
-        // Determine response based on results
-        const hasErrors = summary.errors.length > 0 || summary.parseErrors.length > 0;
-        const hasSuccess = summary.observersCreated > 0;
+        // Determine response based on overall results
+        const hasErrors = overallSummary.errors.length > 0 || overallSummary.parseErrors.length > 0;
+        const hasSuccess = overallSummary.totalObserversCreated > 0;
         
         if (hasErrors && !hasSuccess) {
-            // All rows failed
+            // All files failed
             res.status(400).json({
                 message: 'Upload completed with errors - no observers were created',
-                summary: summary
+                summary: overallSummary
             });
         } else if (hasErrors && hasSuccess) {
             // Partial success
             res.status(207).json({
                 message: 'Upload completed with partial success - some observers were created, some failed',
-                summary: summary
+                summary: overallSummary
             });
         } else {
             // Complete success
             res.status(200).json({
                 message: 'Observers uploaded successfully',
-                summary: summary
+                summary: overallSummary
             });
         }
     } catch (err) {
@@ -1076,7 +1256,7 @@ const uploadObservers = async (req, res) => {
         res.status(500).json({ 
             message: 'Failed to upload observers',
             error: err.message,
-            details: summary.errors.concat(summary.parseErrors)
+            details: overallSummary.errors.concat(overallSummary.parseErrors)
         });
     }
 };
@@ -1094,6 +1274,7 @@ module.exports = {
   updateObserver,
   deleteUser,
   deleteObserver,
+  bulkDeleteObservers,
   upload,
   uploadObservers,
 };

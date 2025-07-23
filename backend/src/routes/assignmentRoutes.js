@@ -22,6 +22,9 @@ router.get('/performance/stats', assignmentController.getPerformanceStats);
 // Genetic algorithm assignment
 router.post('/schedules/:scheduleId/assign-genetic', assignmentController.assignObserversWithGA);
 
+// Linear programming assignment (lexicographic)
+router.post('/schedules/:scheduleId/assign-lp', assignmentController.assignObserversWithLP);
+
 
 
 // Run and compare algorithms

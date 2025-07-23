@@ -66,9 +66,6 @@ const EditObserverModal = ({ observer, onClose, onSave }) => {
     return (
         <div className="edit-observer-modal">
             <div className="modal-content">
-                <button className="close-button" onClick={onClose}>
-                    <FaTimes />
-                </button>
                 <h2>Edit Observer</h2>
 
                 {errors.submit && (
@@ -170,12 +167,12 @@ const EditObserverModal = ({ observer, onClose, onSave }) => {
                     </div>
 
                     <div className="buttons">
-                        <button type="button" className="secondary" onClick={onClose}>
+                        <button type="button" className="button secondary" onClick={onClose}>
                             <FaTimes /> Cancel
                         </button>
                         <button 
                             type="submit" 
-                            className="primary"
+                            className="button primary"
                             disabled={isSubmitting}
                         >
                             <FaSave /> {isSubmitting ? 'Saving...' : 'Save Changes'}
