@@ -12,7 +12,9 @@ import {
     FaSort, 
     FaSortUp, 
     FaSortDown,
-    FaExclamationTriangle
+    FaExclamationTriangle,
+    FaUserMd,
+    FaClock
 } from 'react-icons/fa';
 
 const ScheduleDetails = () => {
@@ -29,6 +31,11 @@ const ScheduleDetails = () => {
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
     const [overlaps, setOverlaps] = useState([]);
     const [showOverlaps, setShowOverlaps] = useState(false);
+    const [roleViolations, setRoleViolations] = useState([]);
+    const [showRoleViolations, setShowRoleViolations] = useState(false);
+    const [timeslotViolations, setTimeslotViolations] = useState([]);
+    const [showTimeslotViolations, setShowTimeslotViolations] = useState(false);
+    const [checkingTimeslots, setCheckingTimeslots] = useState(false);
 
     useEffect(() => {
         if (uploadId) {
@@ -75,21 +82,17 @@ const ScheduleDetails = () => {
         setExams(prev => prev.filter(exam => exam.examId !== deletedExamId));
     };
 
+    // Simple display functions - backend should provide formatted data
     const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
+        if (!dateString) return '';
+        // Backend should provide properly formatted dates
+        return dateString;
     };
 
     const formatTime = (timeString) => {
         if (!timeString) return '';
-        return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        // Backend should provide properly formatted times
+        return timeString;
     };
 
     const sortData = (data, key, direction) => {
@@ -98,9 +101,10 @@ const ScheduleDetails = () => {
             let bValue = key.split('.').reduce((obj, k) => obj?.[k], b);
 
             if (key === 'examDate') {
+                // Simple string comparison - backend should provide consistent date format
                 return direction === 'ascending' 
-                    ? new Date(aValue) - new Date(bValue)
-                    : new Date(bValue) - new Date(aValue);
+                    ? aValue.localeCompare(bValue)
+                    : bValue.localeCompare(aValue);
             }
 
             if (typeof aValue === 'string') {
@@ -217,13 +221,9 @@ const ScheduleDetails = () => {
 
                     // Check if same date
                     if (assignment1.date === assignment2.date) {
-                        // Check for time overlap
-                        const start1 = new Date(`1970-01-01T${assignment1.startTime}`);
-                        const end1 = new Date(`1970-01-01T${assignment1.endTime}`);
-                        const start2 = new Date(`1970-01-01T${assignment2.startTime}`);
-                        const end2 = new Date(`1970-01-01T${assignment2.endTime}`);
-
-                        if (start1 < end2 && end1 > start2) {
+                        // Simple string comparison for time overlap - backend should handle complex logic
+                        // This is just for display purposes
+                        if (assignment1.startTime < assignment2.endTime && assignment1.endTime > assignment2.startTime) {
                             overlapsFound.push({
                                 observer: observerName,
                                 assignment1,
@@ -238,6 +238,95 @@ const ScheduleDetails = () => {
 
         setOverlaps(overlapsFound);
         setShowOverlaps(true);
+    };
+
+    const checkForRoleViolations = () => {
+        if (!exams || exams.length === 0) {
+            setRoleViolations([]);
+            return;
+        }
+
+        const violationsFound = [];
+
+        // Check each exam for role violations
+        exams.forEach(exam => {
+            if (exam.observers.head) {
+                // Get the full observer data to check title and scientific rank
+                const headObserver = exam.observers.headObserver; // This should contain full observer data
+                
+                if (headObserver) {
+                    // Check title and scientific rank like the backend does
+                    const title = (headObserver.title || '').toLowerCase();
+                    const scientificRank = (headObserver.scientificRank || '').toLowerCase();
+                    
+                    const doctorPatterns = [
+                        'dr', 'doctor', 'dr.', 'prof', 'professor', 'assoc prof', 'associate professor',
+                        'assistant prof', 'assistant professor', 'lecturer', 'instructor'
+                    ];
+                    
+                    const hasDoctorTitle = doctorPatterns.some(pattern => title.includes(pattern));
+                    const hasDoctorRank = doctorPatterns.some(pattern => scientificRank.includes(pattern));
+                    const isExplicitlyDoctor = title === 'doctor' || scientificRank === 'doctor';
+                    const hasDrPrefix = title.startsWith('dr') || scientificRank.startsWith('dr');
+                    
+                    const isDoctor = hasDoctorTitle || hasDoctorRank || isExplicitlyDoctor || hasDrPrefix;
+                    
+                    if (!isDoctor) {
+                        violationsFound.push({
+                            examId: exam.examId,
+                            courseName: exam.course.name,
+                            date: exam.examDate,
+                            headName: exam.observers.head,
+                            headTitle: headObserver.title || 'N/A',
+                            headRank: headObserver.scientificRank || 'N/A',
+                            violationType: 'Non-doctor assigned as head'
+                        });
+                    }
+                } else {
+                    // Fallback: check name if full observer data not available
+                const headName = exam.observers.head.toLowerCase();
+                const isDoctor = headName.includes('dr') || headName.includes('doctor') || headName.includes('prof');
+                
+                if (!isDoctor) {
+                    violationsFound.push({
+                        examId: exam.examId,
+                        courseName: exam.course.name,
+                        date: exam.examDate,
+                        headName: exam.observers.head,
+                            violationType: 'Non-doctor assigned as head (insufficient data)'
+                    });
+                    }
+                }
+            }
+        });
+
+        setRoleViolations(violationsFound);
+        setShowRoleViolations(true);
+    };
+
+    const checkForTimeslotViolations = async () => {
+        try {
+            setCheckingTimeslots(true);
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Not authorized');
+            }
+
+            const response = await axios.get(`http://localhost:3000/api/exams/schedules/${uploadId}/check-timeslots`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            setTimeslotViolations(response.data.violations || []);
+            setShowTimeslotViolations(true);
+        } catch (error) {
+            console.error('Error checking timeslot compliance:', error);
+            setError('Failed to check timeslot compliance');
+        } finally {
+            setCheckingTimeslots(false);
+        }
     };
 
     if (!examDetails) {
@@ -273,6 +362,21 @@ const ScheduleDetails = () => {
                     title="Check for overlapping assignments"
                 >
                     <FaExclamationTriangle /> Check Overlaps
+                </button>
+                <button 
+                    className="check-roles-button" 
+                    onClick={checkForRoleViolations}
+                    title="Check for role violations (heads must be doctors)"
+                >
+                    <FaUserMd /> Check Roles
+                </button>
+                <button 
+                    className="check-timeslots-button" 
+                    onClick={checkForTimeslotViolations}
+                    disabled={checkingTimeslots}
+                    title="Check if assignments respect observer timeslots"
+                >
+                    <FaClock /> {checkingTimeslots ? 'Checking...' : 'Check Timeslots'}
                 </button>
             </div>
 
@@ -326,6 +430,108 @@ const ScheduleDetails = () => {
                                                 {formatDate(overlap.assignment2.date)} - {formatTime(overlap.assignment2.startTime)} to {formatTime(overlap.assignment2.endTime)}
                                             </span>
                                         </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {showRoleViolations && (
+                <div className="role-violations-section">
+                    <div className="role-violations-header">
+                        <h3>Role Violations</h3>
+                        <button 
+                            className="close-role-violations" 
+                            onClick={() => setShowRoleViolations(false)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    {roleViolations.length === 0 ? (
+                        <div className="no-role-violations">
+                            ✅ All heads are doctors!
+                        </div>
+                    ) : (
+                        <div className="role-violations-list">
+                            <div className="role-violations-summary">
+                                ⚠️ Found {roleViolations.length} role violation(s)
+                            </div>
+                            {roleViolations.map((violation, index) => (
+                                <div key={index} className="role-violation-item">
+                                    <div className="violation-details">
+                                        <div className="violation-exam">
+                                            <span className="exam-name">{violation.courseName}</span>
+                                            <span className="exam-time">
+                                                {formatDate(violation.date)}
+                                            </span>
+                                        </div>
+                                        <div className="violation-info">
+                                            <strong>Head:</strong> {violation.headName}
+                                            {violation.headTitle && <span> (Title: {violation.headTitle})</span>}
+                                            {violation.headRank && <span> (Rank: {violation.headRank})</span>}
+                                            <span className="violation-type"> - {violation.violationType}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {showTimeslotViolations && (
+                <div className="timeslot-violations-section">
+                    <div className="timeslot-violations-header">
+                        <h3>Timeslot Compliance Check</h3>
+                        <button 
+                            className="close-timeslot-violations" 
+                            onClick={() => setShowTimeslotViolations(false)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                    {timeslotViolations.length === 0 ? (
+                        <div className="no-timeslot-violations">
+                            ✅ All assignments respect observer timeslots!
+                        </div>
+                    ) : (
+                        <div className="timeslot-violations-list">
+                            <div className="timeslot-violations-summary">
+                                ⚠️ Found {timeslotViolations.length} timeslot violation(s)
+                            </div>
+                            {timeslotViolations.map((assignment, index) => (
+                                                                <div key={index} className="timeslot-violation-item">
+                                    <div className="violation-header">
+                                        <strong>{assignment.observerName}</strong> ({assignment.role})
+                                    </div>
+                                    <div className="violation-details">
+                                        <div className="exam-info">
+                                            <span className="course-name">{assignment.courseName}</span>
+                                        </div>
+                                        <div className="time-info">
+                                            <span className="exam-date">{formatDate(assignment.examDate)}</span>
+                                            <span className="exam-time">{assignment.examTime}</span>
+                                            <span className="exam-day">({assignment.examDay})</span>
+                                        </div>
+                                        {assignment.violationType && (
+                                            <div className="violation-reason">
+                                                <strong>Issue:</strong> {assignment.violationType}
+                                            </div>
+                                        )}
+                                        {assignment.availableSlots && assignment.availableSlots.length > 0 && (
+                                            <div className="available-slots">
+                                                <strong>Available slots on {assignment.examDay}:</strong>
+                                                <ul>
+                                                    {assignment.availableSlots.map((slot, slotIndex) => (
+                                                        <li key={slotIndex}>
+                                                            {slot.startTime} - {slot.endTime}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

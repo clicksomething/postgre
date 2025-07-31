@@ -227,7 +227,7 @@ const EditScheduleModal = ({ schedule, onClose, onUpdate }) => {
                                         <strong>{exam.coursename}</strong> - {exam.examname}
                                         <br />
                                         <span className="exam-date">
-                                            Date: {new Date(exam.examdate).toLocaleDateString('en-GB')}
+                                            Date: {exam.examdate || 'N/A'}
                                             {exam.isleapyeardate && ' (Leap year date)'}
                                         </span>
                                     </li>

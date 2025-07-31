@@ -1,4 +1,8 @@
 const moment = require('moment');
+const { 
+  assertValidTimeString,
+  formatTimeForDisplay 
+} = require('./dateTimeUtils');
 
 // Utility function to normalize Arabic numerals to English
 const normalizeArabicNumerals = (str) => {
@@ -75,7 +79,12 @@ const parseTimeSlot = (timeValue, defaultStartTime = '08:00', defaultEndTime = '
 
 // Validate and format time
 const validateAndFormatTime = (time) => {
-    // Ensure time is in HH:MM format
+    try {
+        // Use bulletproof time validation
+        assertValidTimeString(time, 'validateAndFormatTime');
+        return formatTimeForDisplay(time, false); // Return HH:MM format
+    } catch (error) {
+        // Fallback to moment.js for legacy support
     const formattedTime = moment(time, ['HH:mm', 'H:mm', 'HH:m', 'H:m']).format('HH:mm');
     
     if (formattedTime === 'Invalid date') {
@@ -83,6 +92,7 @@ const validateAndFormatTime = (time) => {
     }
     
     return formattedTime;
+    }
 };
 
 module.exports = {

@@ -1,5 +1,9 @@
 // controllers/TimeSlotController.js
 const { client } = require('../../database/db');// Adjust according to your database setup
+const { 
+  parseTimeToMinutes,
+  formatTimeForDisplay 
+} = require('../utils/dateTimeUtils');
 
 // controllers/TimeSlotController.js
 const addTimeSlot = async (req, res) => {
@@ -52,16 +56,16 @@ const addTimeSlot = async (req, res) => {
             });
         }
 
-        // Validate and potentially adjust times for cross-midnight slots
-        let adjustedStartTime = startTime;
-        let adjustedEndTime = endTime;
+        // Validate and potentially adjust times for cross-midnight slots using bulletproof utilities
+        let adjustedStartTime = formatTimeForDisplay(startTime, false);
+        let adjustedEndTime = formatTimeForDisplay(endTime, false);
         let adjustedDay = day;
 
         // If end time is earlier than start time, assume it crosses midnight
-        const startTimeObj = new Date(`1970-01-01T${startTime}`);
-        const endTimeObj = new Date(`1970-01-01T${endTime}`);
+        const startMinutes = parseTimeToMinutes(startTime);
+        const endMinutes = parseTimeToMinutes(endTime);
 
-        if (endTimeObj < startTimeObj) {
+        if (endMinutes < startMinutes) {
             console.log('Cross-midnight time slot detected');
             // Adjust day for the end time
             const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];

@@ -5,6 +5,15 @@ const xlsx = require('xlsx'); // For parsing Excel files
 const storage = multer.memoryStorage(); // Store file in memory
 
 const AssignmentService = require('../services/assignmentService');
+const { 
+  parseTimeToMinutes, 
+  getDayName, 
+  examFitsInTimeslot,
+  assertValidTimeString,
+  toUTCDate,
+  formatTimeForDisplay,
+  formatDateForDisplay
+} = require('../utils/dateTimeUtils');
 
 // File filter for multer
 const fileFilter = (req, file, cb) => {
@@ -63,11 +72,11 @@ const formatExcelDate = (dateStr) => {
     try {
         if (!dateStr) throw new Error('Date value is required');
 
-        // Clean the input string
-        const cleanDate = dateStr.trim();
+        // Clean the input string and handle extra spaces
+        const cleanDate = dateStr.toString().trim();
         
         // Check if it's in DD/MM/YYYY format
-        const dateParts = cleanDate.split('/');
+        const dateParts = cleanDate.split('/').map(part => part.trim());
         if (dateParts.length !== 3) {
             throw new Error(`Invalid date format: ${dateStr}. Expected format: DD/MM/YYYY`);
         }
@@ -76,10 +85,11 @@ const formatExcelDate = (dateStr) => {
         const month = parseInt(dateParts[1]) - 1; // JavaScript months are 0-based
         const year = parseInt(dateParts[2]);
 
-        // Create and validate the date
+        // Create date in local time and return YYYY-MM-DD format
+        // Don't convert to UTC since we want to preserve the local date
         const date = new Date(year, month, day);
         
-        // Validate the date is real
+        // Validate the date
         if (isNaN(date.getTime())) {
             throw new Error(`Invalid date: ${dateStr}`);
         }
@@ -92,19 +102,17 @@ const formatExcelDate = (dateStr) => {
     }
 };
 
-// Update time format handling for AM/PM format
+// Update time format handling using bulletproof utilities
 const formatExcelTime = (timeStr) => {
     try {
         if (!timeStr) throw new Error('Time value is required');
         
-        // Handle AM/PM format
-        const timePattern = /^(0?[1-9]|1[0-2]):([0-5][0-9]) (AM|PM)$/i;
         const trimmedTime = timeStr.toString().trim();
         
-        if (!timePattern.test(trimmedTime)) {
-            throw new Error(`Invalid time format: ${timeStr}. Expected format: HH:MM AM/PM`);
-        }
+        // Handle AM/PM format
+        const timePattern = /^(0?[1-9]|1[0-2]):([0-5][0-9]) (AM|PM)$/i;
         
+        if (timePattern.test(trimmedTime)) {
         // Convert to 24-hour format for database
         const [time, period] = trimmedTime.split(' ');
         const [hours, minutes] = time.split(':');
@@ -116,7 +124,13 @@ const formatExcelTime = (timeStr) => {
             hour = 0;
         }
         
-        return `${hour.toString().padStart(2, '0')}:${minutes}`;
+            const time24Hour = `${hour.toString().padStart(2, '0')}:${minutes}`;
+            // Use bulletproof time validation and formatting
+            return formatTimeForDisplay(time24Hour, false);
+        }
+        
+        // Handle 24-hour format - use bulletproof validation
+        return formatTimeForDisplay(trimmedTime, false);
     } catch (error) {
         console.error('Time conversion error:', error);
         throw new Error(`Invalid time format: ${timeStr}`);
@@ -318,13 +332,11 @@ const updateExam = async (req, res) => {
             numOfStudents 
         } = req.body;
 
-        // Ensure we only have HH:mm format
-        startTime = startTime.split(':').slice(0, 2).join(':');
-        endTime = endTime.split(':').slice(0, 2).join(':');
-
-        // Validate time format (HH:mm)
-        const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-        if (!timePattern.test(startTime) || !timePattern.test(endTime)) {
+        // Use bulletproof time formatting
+        try {
+            startTime = formatTimeForDisplay(startTime, false); // Return HH:MM format
+            endTime = formatTimeForDisplay(endTime, false); // Return HH:MM format
+        } catch (error) {
             return res.status(400).json({ 
                 message: "Invalid time format. Use HH:mm format" 
             });
@@ -704,8 +716,8 @@ const getSchedules = async (req, res) => {
                 academicYear: row.academicyear,
                 semester: row.semester,
                 examType: row.examtype,
-                uploadedAt: row.uploadedat,
-                processedAt: row.processedat,
+                uploadedAt: formatDateForDisplay(row.uploadedat),
+                processedAt: row.processedat ? formatDateForDisplay(row.processedat) : null,
                 status: row.status,
                 fileName: row.filename,
                 examCount: row.examcount
@@ -741,34 +753,8 @@ const shuffleArray = (array) => {
 };
 
 function hasTimeConflict(existingExam, newExam) {
-    // If exams are on different days, no conflict
-    if (new Date(existingExam.examdate).toDateString() !== new Date(newExam.examdate).toDateString()) {
-        return false;
-    }
-
-    // Convert times to minutes since midnight for precise comparison
-    const convertToMinutes = (timeStr) => {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        return hours * 60 + minutes;
-    };
-
-    const existingStart = convertToMinutes(existingExam.starttime.split(' ')[0]);
-    const existingEnd = convertToMinutes(existingExam.endtime.split(' ')[0]);
-    const newStart = convertToMinutes(newExam.starttime.split(' ')[0]);
-    const newEnd = convertToMinutes(newExam.endtime.split(' ')[0]);
-
-    // Check for actual time overlap
-    const hasOverlap = !(newEnd <= existingStart || newStart >= existingEnd);
-
-    console.log(`🔍 [TIME CONFLICT] Detailed Check:
-        Existing Exam: ${existingExam.coursename || 'Unknown'} 
-        Time: ${existingExam.starttime} - ${existingExam.endtime}
-        New Exam: ${newExam.coursename || 'Unknown'}
-        Time: ${newExam.starttime} - ${newExam.endtime}
-        Overlap: ${hasOverlap}
-    `);
-
-    return hasOverlap;
+    // Use bulletproof date/time utilities
+    return examsOverlap(existingExam, newExam);
 }
 
 function findAvailableObserver(exam, observerPool, mustBeDr) {
@@ -899,8 +885,14 @@ const getScheduleDetails = async (req, res) => {
                 r.RoomID,
                 r.RoomNum,
                 r.SeatingCapacity,
+                oh.ObserverID as HeadObserverID,
                 oh.Name as HeadObserverName,
-                os.Name as SecretaryObserverName
+                oh.Title as HeadObserverTitle,
+                oh.ScientificRank as HeadObserverRank,
+                os.ObserverID as SecretaryObserverID,
+                os.Name as SecretaryObserverName,
+                os.Title as SecretaryObserverTitle,
+                os.ScientificRank as SecretaryObserverRank
              FROM ExamSchedule e
              LEFT JOIN Course c ON e.CourseID = c.CourseID
              LEFT JOIN Room r ON e.RoomID = r.RoomID
@@ -933,7 +925,7 @@ const getScheduleDetails = async (req, res) => {
                 examType: exam.examtype,
                 startTime: exam.starttime,
                 endTime: exam.endtime,
-                examDate: exam.examdate,
+                examDate: formatDateForDisplay(exam.examdate),
                 numOfStudents: exam.numofstudents,
                 status: exam.examstatus,
                 course: {
@@ -948,7 +940,19 @@ const getScheduleDetails = async (req, res) => {
                 },
                 observers: {
                     head: exam.headobservername,
-                    secretary: exam.secretaryobservername
+                    secretary: exam.secretaryobservername,
+                    headObserver: exam.headobserverid ? {
+                        id: exam.headobserverid,
+                        name: exam.headobservername,
+                        title: exam.headobservertitle,
+                        scientificRank: exam.headobserverrank
+                    } : null,
+                    secretaryObserver: exam.secretaryobserverid ? {
+                        id: exam.secretaryobserverid,
+                        name: exam.secretaryobservername,
+                        title: exam.secretaryobservertitle,
+                        scientificRank: exam.secretaryobserverrank
+                    } : null
                 }
             }))
         };
@@ -1143,7 +1147,13 @@ const getAllExamsWithAssignments = async (req, res) => {
         
         console.log('Query result:', result.rows);
 
-        res.json(result.rows);
+        // Format dates for frontend display
+        const formattedRows = result.rows.map(row => ({
+            ...row,
+            examDate: formatDateForDisplay(row.examDate)
+        }));
+
+        res.json(formattedRows);
     } catch (error) {
         console.error('FULL Error details:', error);
         console.error('Error name:', error.name);
@@ -1187,7 +1197,14 @@ const getScheduleAssignments = async (req, res) => {
         `;
 
         const result = await client.query(query);
-        res.json(result.rows);
+        
+        // Format dates for frontend display
+        const formattedRows = result.rows.map(row => ({
+            ...row,
+            uploadDate: formatDateForDisplay(row.uploadDate)
+        }));
+        
+        res.json(formattedRows);
     } catch (error) {
         console.error('Error fetching schedule assignments:', error);
         res.status(500).json({ 
@@ -1195,6 +1212,207 @@ const getScheduleAssignments = async (req, res) => {
             error: error.message 
         });
     }
+};
+
+const checkTimeslotCompliance = async (req, res) => {
+    try {
+        const { scheduleId } = req.params;
+        
+        // Get all exams in the schedule with their assignments
+        const examsQuery = `
+            SELECT 
+                e.ExamID,
+                e.ExamDate,
+                e.StartTime,
+                e.EndTime,
+                e.ExamName,
+                c.CourseName,
+                e.ExamHead,
+                e.ExamSecretary,
+                o1.Name as HeadName,
+                o2.Name as SecretaryName
+            FROM ExamSchedule e
+            LEFT JOIN Course c ON e.CourseID = c.CourseID
+            LEFT JOIN Observer o1 ON e.ExamHead = o1.ObserverID
+            LEFT JOIN Observer o2 ON e.ExamSecretary = o2.ObserverID
+            WHERE e.ScheduleID = $1
+            ORDER BY e.ExamDate, e.StartTime
+        `;
+        
+        const examsResult = await client.query(examsQuery, [scheduleId]);
+        const exams = examsResult.rows;
+        
+        if (exams.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No exams found in this schedule',
+                violations: [],
+                summary: {
+                    totalExams: 0,
+                    violationsFound: 0,
+                    compliantExams: 0
+                }
+            });
+        }
+        
+        // Get all observers with their timeslots
+        const observersQuery = `
+            SELECT 
+                o.ObserverID,
+                o.Name,
+                o.Title,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'day', ts.day,
+                            'startTime', ts.StartTime,
+                            'endTime', ts.EndTime
+                        )
+                    ) FILTER (WHERE ts.TimeSlotID IS NOT NULL),
+                    '[]'::json
+                ) as timeSlots
+            FROM Observer o
+            LEFT JOIN TimeSlot ts ON o.ObserverID = ts.ObserverID
+            GROUP BY o.ObserverID, o.Name, o.Title
+        `;
+        
+        const observersResult = await client.query(observersQuery);
+        const observers = observersResult.rows;
+        
+        // Create a map of observers for quick lookup
+        const observerMap = new Map();
+        observers.forEach(observer => {
+            observerMap.set(observer.observerid, {
+                id: observer.observerid,
+                name: observer.name,
+                title: observer.title,
+                timeSlots: observer.timeslots || []
+            });
+        });
+        
+        const violations = [];
+        
+        // Check each exam for timeslot compliance
+        exams.forEach(exam => {
+            // Handle date conversion more robustly with timezone consideration
+            let examDate;
+            if (exam.examdate instanceof Date) {
+                examDate = exam.examdate;
+            } else if (typeof exam.examdate === 'string') {
+                examDate = new Date(exam.examdate);
+            } else {
+                examDate = new Date(exam.examdate);
+            }
+            
+            // Get the local day from the UTC date using bulletproof utility
+            const examDay = getDayName(examDate);
+            const examStartTime = exam.starttime;
+            const examEndTime = exam.endtime;
+            
+            // Check head observer
+            if (exam.examhead) {
+                const headObserver = observerMap.get(exam.examhead);
+                if (headObserver) {
+                    const headResult = checkObserverTimeslotCompliance(
+                        headObserver, 
+                        exam, 
+                        'head', 
+                        examDay, 
+                        examStartTime, 
+                        examEndTime
+                    );
+                    if (headResult && headResult.violationType) {
+                        violations.push(headResult);
+                    }
+                }
+            }
+            
+            // Check secretary observer
+            if (exam.examsecretary) {
+                const secretaryObserver = observerMap.get(exam.examsecretary);
+                if (secretaryObserver) {
+                    const secretaryResult = checkObserverTimeslotCompliance(
+                        secretaryObserver, 
+                        exam, 
+                        'secretary', 
+                        examDay, 
+                        examStartTime, 
+                        examEndTime
+                    );
+                    if (secretaryResult && secretaryResult.violationType) {
+                        violations.push(secretaryResult);
+                    }
+                }
+            }
+        });
+        
+        const summary = {
+            totalExams: exams.length,
+            violationsFound: violations.length,
+            compliantExams: exams.length - violations.length
+        };
+        
+        res.json({
+            success: true,
+            message: violations.length === 0 ? 'All assignments respect observer timeslots' : 'Found timeslot violations',
+            violations,
+            summary
+        });
+        
+    } catch (error) {
+        console.error('Error checking timeslot compliance:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Failed to check timeslot compliance',
+            error: error.message 
+        });
+    }
+};
+
+// Helper function to check if an observer can take an exam based on their timeslots
+const checkObserverTimeslotCompliance = (observer, exam, role, examDay, examStartTime, examEndTime) => {
+    // If observer has no timeslots, they are full-time and can take any exam
+    if (!observer.timeSlots || observer.timeSlots.length === 0) {
+        return null;
+    }
+    
+    // Convert exam times to minutes using bulletproof utility
+    const examStartMinutes = parseTimeToMinutes(examStartTime);
+    const examEndMinutes = parseTimeToMinutes(examEndTime);
+    
+    // Check if observer has any timeslot that can accommodate this exam
+    const canTake = observer.timeSlots.some(slot => {
+        if (!slot.day) return false;
+        
+        const slotDay = slot.day.toLowerCase();
+        const slotStartMinutes = parseTimeToMinutes(slot.startTime);
+        const slotEndMinutes = parseTimeToMinutes(slot.endTime);
+        
+        // Check if day matches and exam fits within timeslot
+        const dayMatch = slotDay === examDay;
+        const timeMatch = slotStartMinutes <= examStartMinutes && slotEndMinutes >= examEndMinutes;
+        
+        return dayMatch && timeMatch;
+    });
+    
+    if (!canTake) {
+        return {
+            examId: exam.examid,
+            examName: exam.coursename, // Use course name instead of exam name
+            courseName: exam.coursename,
+            examDate: exam.examdate,
+            examTime: `${examStartTime} - ${examEndTime}`,
+            examDay: examDay,
+            observerId: observer.id,
+            observerName: observer.name,
+            role: role,
+            violationType: 'Timeslot mismatch',
+            availableSlots: observer.timeSlots.filter(slot => slot.day?.toLowerCase() === examDay)
+        };
+    }
+    
+    // If no violation, return null (won't be included in results)
+    return null;
 };
 
 module.exports = {
@@ -1211,5 +1429,6 @@ module.exports = {
     updateSchedule,
     getAllExamsWithAssignments,
     getScheduleAssignments,
-    randomDistribution
+    randomDistribution,
+    checkTimeslotCompliance
 };

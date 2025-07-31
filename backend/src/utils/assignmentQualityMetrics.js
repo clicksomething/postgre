@@ -3,6 +3,11 @@
  * Calculates various quality metrics for exam-observer assignments
  */
 
+const { 
+  toUTCDate,
+  parseTimeToMinutes 
+} = require('./dateTimeUtils');
+
 class AssignmentQualityMetrics {
     /**
      * Calculate all quality metrics for an assignment result
@@ -57,6 +62,19 @@ class AssignmentQualityMetrics {
      * Calculate workload balance among observers
      */
     static calculateWorkloadBalance(assignments, observers) {
+        if (!observers || !Array.isArray(observers)) {
+            console.error('calculateWorkloadBalance: observers is undefined or not an array:', observers);
+            return {
+                workloadDistribution: {},
+                averageWorkload: 0,
+                standardDeviation: 0,
+                coefficientOfVariation: 0,
+                minWorkload: 0,
+                maxWorkload: 0,
+                score: 0
+            };
+        }
+        
         const workloadMap = new Map();
         
         // Initialize all observers with 0 workload
@@ -105,14 +123,16 @@ class AssignmentQualityMetrics {
     static calculateEfficiency(assignments, exams) {
         let continuityCount = 0;
         let possibleContinuities = 0;
+        let totalExams = assignments.length;
+        let assignedExams = assignments.filter(a => a.headId && a.secretaryId).length;
 
-        // Sort assignments by exam date and time
+        // Sort assignments by exam date and time using bulletproof utilities
         const sortedAssignments = assignments
             .map((a, idx) => ({ ...a, exam: exams[idx] }))
             .sort((a, b) => {
-                const dateCompare = new Date(a.exam.examdate) - new Date(b.exam.examdate);
+                const dateCompare = toUTCDate(a.exam.examdate) - toUTCDate(b.exam.examdate);
                 if (dateCompare !== 0) return dateCompare;
-                return a.exam.starttime.localeCompare(b.exam.starttime);
+                return parseTimeToMinutes(a.exam.starttime) - parseTimeToMinutes(b.exam.starttime);
             });
 
         // Check consecutive exams
@@ -133,13 +153,34 @@ class AssignmentQualityMetrics {
             }
         }
 
-        const score = possibleContinuities > 0 ? continuityCount / possibleContinuities : 1;
+        // Calculate efficiency based on multiple factors
+        let efficiencyScore = 0;
+        
+        if (possibleContinuities > 0) {
+            // If there are consecutive opportunities, use continuity ratio
+            efficiencyScore = continuityCount / possibleContinuities;
+        } else {
+            // If no consecutive opportunities, base efficiency on assignment success rate
+            // and observer utilization efficiency
+            const assignmentSuccessRate = totalExams > 0 ? assignedExams / totalExams : 0;
+            
+            // Calculate observer utilization efficiency (how well observers are used)
+            const uniqueObservers = new Set();
+            assignments.forEach(assignment => {
+                if (assignment.headId) uniqueObservers.add(assignment.headId);
+                if (assignment.secretaryId) uniqueObservers.add(assignment.secretaryId);
+            });
+            
+            // Efficiency is based on assignment success and reasonable observer utilization
+            efficiencyScore = assignmentSuccessRate * 0.8; // Cap at 80% when no consecutive opportunities
+        }
 
         return {
             continuityCount: continuityCount,
             possibleContinuities: possibleContinuities,
-            percentage: possibleContinuities > 0 ? (continuityCount / possibleContinuities) * 100 : 100,
-            score: score
+            assignmentSuccessRate: totalExams > 0 ? (assignedExams / totalExams) * 100 : 0,
+            percentage: efficiencyScore * 100,
+            score: efficiencyScore
         };
     }
 
@@ -161,26 +202,33 @@ class AssignmentQualityMetrics {
             }
         });
 
-        // Calculate Gini coefficient
-        const workloads = Array.from(workloadMap.values()).sort((a, b) => a - b);
+        // Filter out observers with zero workload for Gini calculation
+        const workloads = Array.from(workloadMap.values()).filter(w => w > 0).sort((a, b) => a - b);
         const n = workloads.length;
         
-        if (n === 0 || workloads.every(w => w === 0)) {
+        if (n === 0) {
             return { giniCoefficient: 0, score: 1 };
         }
 
+        if (n === 1) {
+            return { giniCoefficient: 0, score: 1 };
+        }
+
+        // Calculate Gini coefficient using the correct formula
         let sumOfDifferences = 0;
         let sumOfValues = 0;
 
         for (let i = 0; i < n; i++) {
             sumOfValues += workloads[i];
-            sumOfDifferences += (2 * (i + 1) - n - 1) * workloads[i];
+            for (let j = 0; j < n; j++) {
+                sumOfDifferences += Math.abs(workloads[i] - workloads[j]);
+            }
         }
 
-        const gini = sumOfValues > 0 ? sumOfDifferences / (n * sumOfValues) : 0;
+        const gini = sumOfValues > 0 ? sumOfDifferences / (2 * n * sumOfValues) : 0;
         
         // Score: inverse of Gini (lower Gini = higher fairness)
-        const score = 1 - Math.abs(gini);
+        const score = Math.max(0, 1 - gini);
 
         return {
             giniCoefficient: gini,

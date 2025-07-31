@@ -41,18 +41,18 @@ const UploadObservers = ({ onUploadSuccess }) => {
         const errors = [];
 
         newFiles.forEach(file => {
-            // Check file type
-            const validTypes = [
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel'
-            ];
-            if (!validTypes.includes(file.type)) {
+        // Check file type
+        const validTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel'
+        ];
+        if (!validTypes.includes(file.type)) {
                 errors.push(`${file.name}: Please upload only Excel files (.xlsx or .xls)`);
-                return;
-            }
+            return;
+        }
 
-            // Check file size (5MB limit)
-            if (file.size > 5 * 1024 * 1024) {
+        // Check file size (5MB limit)
+        if (file.size > 5 * 1024 * 1024) {
                 errors.push(`${file.name}: File size should not exceed 5MB`);
                 return;
             }
@@ -63,8 +63,8 @@ const UploadObservers = ({ onUploadSuccess }) => {
             );
             if (fileExists) {
                 errors.push(`${file.name}: File already selected`);
-                return;
-            }
+            return;
+        }
 
             validFiles.push(file);
         });
@@ -229,9 +229,9 @@ const UploadObservers = ({ onUploadSuccess }) => {
                         <div className="files-list">
                             {files.map((file, index) => (
                                 <div key={index} className="file-item">
-                                    <FaFile className="file-icon" />
+                        <FaFile className="file-icon" />
                                     <div className="file-details">
-                                        <p className="file-name">{file.name}</p>
+                        <p className="file-name">{file.name}</p>
                                         <p className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                                     </div>
                                     <button 

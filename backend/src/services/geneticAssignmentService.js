@@ -2,53 +2,78 @@ const { client } = require('../../database/db');
 const fs = require('fs').promises;
 const path = require('path');
 const AssignmentQualityMetrics = require('../utils/assignmentQualityMetrics');
+const { 
+  parseTimeToMinutes, 
+  getDayName, 
+  examsOverlap, 
+  timeRangesOverlap,
+  assertValidDate 
+} = require('../utils/dateTimeUtils');
+const ObserverUtils = require('../utils/observerUtils');
+const AssignmentValidationService = require('./assignmentValidationService');
+// ChromosomeStrategyService removed - using built-in methods instead
+
+const { GA_CONSTANTS, GA_STRATEGY_NAMES, GA_MUTATION_TYPES } = require('../constants/geneticAlgorithmConstants');
 
 class GeneticAssignmentService {
     constructor(options = {}) {
-        // Validate required parameters
-        if (!options.populationSize || !options.generations || !options.mutationRate || 
-            !options.crossoverRate || !options.elitismRate) {
-            throw new Error('Missing required genetic algorithm parameters: populationSize, generations, mutationRate, crossoverRate, elitismRate');
+        // Validate parameters if provided
+        if (options.populationSize && options.populationSize < 50) {
+            throw new Error('Population size must be at least 50');
+        }
+        if (options.generations && options.generations < 20) {
+            throw new Error('Number of generations must be at least 20');
+        }
+        if (options.mutationRate && (options.mutationRate < 0 || options.mutationRate > 1)) {
+            throw new Error('Mutation rate must be between 0 and 1');
+        }
+        if (options.crossoverRate && (options.crossoverRate < 0 || options.crossoverRate > 1)) {
+            throw new Error('Crossover rate must be between 0 and 1');
+        }
+        if (options.elitismRate && (options.elitismRate < 0 || options.elitismRate > 0.5)) {
+            throw new Error('Elitism rate must be between 0 and 0.5');
         }
         
-        // GA parameters - Use only the parameters passed from frontend
-        this.populationSize = options.populationSize;
-        this.generations = options.generations;
-        this.baseMutationRate = options.mutationRate;
+        // GA parameters with optimized defaults
+        this.populationSize = options.populationSize || 300; // Larger population for better diversity
+        this.generations = options.generations || 150; // More generations for better convergence
+        this.baseMutationRate = options.mutationRate || 0.15; // Lower base mutation rate
         this.mutationRate = this.baseMutationRate;
-        this.crossoverRate = options.crossoverRate;
-        this.elitismRate = options.elitismRate;
-        this.tournamentSize = options.tournamentSize || 5;
+        this.crossoverRate = options.crossoverRate || 0.85; // Higher crossover rate
+        this.elitismRate = options.elitismRate || 0.1; // Keep 10% of best solutions
+        this.tournamentSize = options.tournamentSize || 7; // Larger tournament for better selection pressure
         
         // Enhanced mutation rate adaptation parameters
-        this.minMutationRate = options.minMutationRate || 0.05;
-        this.maxMutationRate = options.maxMutationRate || 0.5;
+        this.minMutationRate = options.minMutationRate || GA_CONSTANTS.DEFAULT_MIN_MUTATION_RATE;
+        this.maxMutationRate = options.maxMutationRate || GA_CONSTANTS.DEFAULT_MAX_MUTATION_RATE;
         
         // Deterministic initialization option
         this.useDeterministicInit = options.useDeterministicInit;
         
         // Early convergence parameters
         this.convergenceGenerations = options.convergenceGenerations || 50;
-        this.convergenceThreshold = options.convergenceThreshold || 0.005;
+        this.convergenceThreshold = options.convergenceThreshold || GA_CONSTANTS.DEFAULT_CONVERGENCE_THRESHOLD;
         
         // Restart mechanism parameters
         this.restartGenerations = options.restartGenerations || 40;
         
         // Local search parameters for hybrid approach
-        this.localSearchRate = 0.2; // Apply to top 20% of population
-        this.localSearchIterations = 15; // Maximum local search iterations per individual
+        this.localSearchRate = GA_CONSTANTS.DEFAULT_LOCAL_SEARCH_RATE; // Apply to top 20% of population
+        this.localSearchIterations = GA_CONSTANTS.DEFAULT_LOCAL_SEARCH_ITERATIONS; // Maximum local search iterations per individual
         
         // Performance tracking
         this.performanceMetrics = {
             startTime: null,
             generations: [],
-            bestFitness: 0,
+            b: 0,
             finalAssignments: 0,
             mutationRates: [],
             localSearchImprovements: []
         };
+        
+        // Initialize validation service
+        this.validationService = new AssignmentValidationService();
     }
-
 
 
     /**
@@ -79,9 +104,8 @@ class GeneticAssignmentService {
         chromosomeDiversity /= (population.length * (population.length - 1) / 2);
         
         // Combine both metrics (weighted average)
-        return (0.7 * chromosomeDiversity + 0.3 * fitnessVariance);
+        return (GA_CONSTANTS.DIVERSITY_WEIGHTS.CHROMOSOME * chromosomeDiversity + GA_CONSTANTS.DIVERSITY_WEIGHTS.FITNESS_VARIANCE * fitnessVariance);
     }
-
     /**
      * Calculate difference between two chromosomes
      */
@@ -98,7 +122,6 @@ class GeneticAssignmentService {
         
         return differences / length;
     }
-
     /**
      * Update mutation rate based on population diversity and generation progress
      */
@@ -113,29 +136,29 @@ class GeneticAssignmentService {
         const recentGenerations = this.performanceMetrics.generations.slice(-15);
         const hasStagnation = recentGenerations.length >= 10 && 
             recentGenerations.every((gen, i) => i === 0 || 
-                Math.abs(gen.bestFitness - recentGenerations[i-1].bestFitness) < 0.001);
+                Math.abs(gen.bestFitness - recentGenerations[i-1].bestFitness) < GA_CONSTANTS.STAGNATION_THRESHOLD);
         
         if (hasStagnation) {
             // Stagnation detected - aggressive mutation
-            newRate = Math.min(this.mutationRate * 2.0, this.maxMutationRate);
-        } else if (diversity < 0.1) {
+            newRate = Math.min(this.mutationRate * GA_CONSTANTS.MUTATION_ADAPTATION.STAGNATION_MULTIPLIER, this.maxMutationRate);
+        } else if (diversity < GA_CONSTANTS.MUTATION_ADAPTATION.LOW_DIVERSITY_THRESHOLD) {
             // Low diversity - aggressive increase
-            newRate = Math.min(this.mutationRate * 2.0, this.maxMutationRate);
-        } else if (diversity < 0.2) {
+            newRate = Math.min(this.mutationRate * GA_CONSTANTS.MUTATION_ADAPTATION.STAGNATION_MULTIPLIER, this.maxMutationRate);
+        } else if (diversity < GA_CONSTANTS.MUTATION_ADAPTATION.MODERATE_DIVERSITY_THRESHOLD) {
             // Low diversity - moderate increase
-            newRate = Math.min(this.mutationRate * 1.5, this.maxMutationRate);
-        } else if (diversity > 0.5) {
+            newRate = Math.min(this.mutationRate * GA_CONSTANTS.MUTATION_ADAPTATION.MODERATE_DIVERSITY_MULTIPLIER, this.maxMutationRate);
+        } else if (diversity > GA_CONSTANTS.MUTATION_ADAPTATION.HIGH_DIVERSITY_THRESHOLD) {
             // High diversity - reduce mutation
-            newRate = Math.max(this.mutationRate * 0.8, this.minMutationRate);
+            newRate = Math.max(this.mutationRate * GA_CONSTANTS.MUTATION_ADAPTATION.HIGH_DIVERSITY_MULTIPLIER, this.minMutationRate);
         } else {
             // Moderate diversity - keep base rate
             newRate = this.baseMutationRate;
         }
         
         // Progressive mutation rate increase based on generation progress
-        if (progressRatio > 0.7 && this.mutationRate < this.maxMutationRate * 0.8) {
+        if (progressRatio > GA_CONSTANTS.MUTATION_ADAPTATION.LATE_GENERATION_THRESHOLD && this.mutationRate < this.maxMutationRate * 0.8) {
             // In later generations, gradually increase mutation to escape local optima
-            newRate = Math.min(newRate * 1.1, this.maxMutationRate);
+            newRate = Math.min(newRate * GA_CONSTANTS.MUTATION_ADAPTATION.LATE_GENERATION_MULTIPLIER, this.maxMutationRate);
         }
         
         // Ensure rate stays within bounds
@@ -155,15 +178,12 @@ class GeneticAssignmentService {
         
         return this.mutationRate;
     }
-
     /**
      * Main entry point for genetic algorithm assignment
      */
     async assignObserversWithGA(examIds) {
         // Start the timer when assignment actually begins
         this.performanceMetrics.startTime = Date.now();
-        
-
         
         try {
             await client.query('BEGIN');
@@ -329,7 +349,6 @@ class GeneticAssignmentService {
             throw error;
         }
     }
-
     /**
      * Load all necessary data for the GA
      */
@@ -401,7 +420,6 @@ class GeneticAssignmentService {
             scheduleId
         };
     }
-
     /**
      * Initialize population with random chromosomes
      */
@@ -410,46 +428,34 @@ class GeneticAssignmentService {
         
         // Create diverse high-quality initial population using multiple strategies
         if (this.useDeterministicInit && this.populationSize > 0) {
-            // Strategy 1: Original greedy approach (with randomization)
-            const greedyChromosome = this.createGreedyChromosome(data, true);
-            const validatedGreedy = this.validateAndRepairChromosome(greedyChromosome, data);
-            population.push({ chromosome: validatedGreedy, fitness: 0, isGreedy: true, strategy: 'greedy' });
-            
-            // Strategy 2: Workload-balanced greedy (with randomization)
-            const workloadBalancedChromosome = this.createWorkloadBalancedChromosome(data, true);
-            const validatedWorkload = this.validateAndRepairChromosome(workloadBalancedChromosome, data);
-            population.push({ chromosome: validatedWorkload, fitness: 0, isGreedy: true, strategy: 'workload-balanced' });
-            
-            // Strategy 3: Constraint-aware greedy (with randomization)
+            // Strategy 1: Constraint-aware approach
             const constraintAwareChromosome = this.createConstraintAwareChromosome(data, true);
             const validatedConstraint = this.validateAndRepairChromosome(constraintAwareChromosome, data);
-            population.push({ chromosome: validatedConstraint, fitness: 0, isGreedy: true, strategy: 'constraint-aware' });
+            population.push({ chromosome: validatedConstraint, fitness: 0, strategy: 'constraint-aware' });
             
-            // Strategy 4: Qualification-optimized greedy (with randomization)
+            // Strategy 2: Qualification-optimized approach
             const qualificationOptimizedChromosome = this.createQualificationOptimizedChromosome(data, true);
             const validatedQualification = this.validateAndRepairChromosome(qualificationOptimizedChromosome, data);
-            population.push({ chromosome: validatedQualification, fitness: 0, isGreedy: true, strategy: 'qualification-optimized' });
+            population.push({ chromosome: validatedQualification, fitness: 0, strategy: 'qualification-optimized' });
             
-            // Strategy 5: Time-slot optimized greedy (with randomization)
+            // Strategy 3: Time-slot optimized approach
             const timeSlotOptimizedChromosome = this.createTimeSlotOptimizedChromosome(data, true);
             const validatedTimeSlot = this.validateAndRepairChromosome(timeSlotOptimizedChromosome, data);
-            population.push({ chromosome: validatedTimeSlot, fitness: 0, isGreedy: true, strategy: 'time-slot-optimized' });
+            population.push({ chromosome: validatedTimeSlot, fitness: 0, strategy: 'time-slot-optimized' });
             
             // Add more randomized variants of each strategy
             const strategies = [
-                () => this.createGreedyChromosome(data, true),
-                () => this.createWorkloadBalancedChromosome(data, true),
                 () => this.createConstraintAwareChromosome(data, true),
                 () => this.createQualificationOptimizedChromosome(data, true),
                 () => this.createTimeSlotOptimizedChromosome(data, true)
             ];
             
             // Add 3-5 randomized variants of each strategy
-            for (let i = 0; i < Math.min(5, Math.floor(this.populationSize * 0.03)); i++) {
+            for (let i = 0; i < Math.min(5, Math.floor(this.populationSize * 0.1)); i++) {
                 const strategyIndex = i % strategies.length;
                 const variantChromosome = strategies[strategyIndex]();
                 const validatedVariant = this.validateAndRepairChromosome(variantChromosome, data);
-                population.push({ chromosome: validatedVariant, fitness: 0, isGreedy: true, strategy: `randomized-${strategyIndex}` });
+                population.push({ chromosome: validatedVariant, fitness: 0, strategy: `randomized-${strategyIndex}` });
             }
         }
         
@@ -457,7 +463,7 @@ class GeneticAssignmentService {
         while (population.length < this.populationSize) {
             const chromosome = this.createImprovedRandomChromosome(data);
             const validatedChromosome = this.validateAndRepairChromosome(chromosome, data);
-            population.push({ chromosome: validatedChromosome, fitness: 0, isGreedy: false, strategy: 'improved-random' });
+            population.push({ chromosome: validatedChromosome, fitness: 0, strategy: 'improved-random' });
         }
         
         // Log validation statistics
@@ -469,267 +475,10 @@ class GeneticAssignmentService {
         // Store initial population quality for restart decisions
         this.initialPopulationQuality = avgValidAssignments / data.exams.length;
         
-        // Debug: Check a few chromosomes to see what's happening
-        const sampleChromosomes = population.slice(0, 5);
-        sampleChromosomes.forEach((ind, idx) => {
-            // Removed debug logging to reduce spam
-        });
-        
         // Only log a single summary line for initialization
         console.log(`[GA] Initial population: ${population.length} individuals, quality ${(this.initialPopulationQuality * 100).toFixed(1)}%`);
         
         return population;
-    }
-
-    /**
-     * Create a chromosome using greedy algorithm (deterministic)
-     */
-    createGreedyChromosome(data, addRandomization = false) {
-        const chromosome = [];
-        const observerUsage = new Map();
-        const observerContinuity = new Map(); // Track last exam for each observer
-        const processedExams = new Set(); // Track processed exams to prevent duplicates
-        
-        // Sort exams by date and time for consistent ordering
-        const sortedExams = [...data.exams].sort((a, b) => {
-            const dateCompare = new Date(a.examdate) - new Date(b.examdate);
-            if (dateCompare !== 0) return dateCompare;
-            return a.starttime.localeCompare(b.starttime);
-        });
-        
-        // Calculate initial observer scores
-        const observerScores = new Map();
-        data.observers.forEach(observer => {
-            // Base score starts at 1
-            let score = 1;
-            
-            // Prefer observers with Dr. title for head position
-            if (observer.title && observer.title.toLowerCase().includes('dr')) {
-                score *= 1.2;
-            }
-            
-            // Prefer full-time over part-time observers
-            const availability = observer.availability ? observer.availability.toLowerCase() : 'full-time';
-            if (availability === 'full-time') {
-                score *= 1.1;
-            }
-            
-            observerScores.set(observer.observerid, score);
-        });
-        
-        for (let examIndex = 0; examIndex < sortedExams.length; examIndex++) {
-            const exam = sortedExams[examIndex];
-            
-            // Skip if we've already processed this exam
-            if (processedExams.has(exam.examid)) {
-                continue;
-            }
-            
-            const availableObservers = this.getAvailableObserversForExam(
-                exam, 
-                data.observers, 
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                // Score available observers
-                const scoredObservers = availableObservers.map(observer => {
-                    let score = observerScores.get(observer.observerid) || 1;
-                    const currentWorkload = observerUsage.get(observer.observerid)?.length || 0;
-                    
-                    // Penalize high workload
-                    score /= (1 + currentWorkload * 0.2);
-                    
-                    // Bonus for continuity (if observer was in previous exam)
-                    if (examIndex > 0) {
-                        const prevExam = sortedExams[examIndex - 1];
-                        const lastExamDate = observerContinuity.get(observer.observerid);
-                        
-                        if (lastExamDate && 
-                            lastExamDate.date === exam.examdate &&
-                            lastExamDate.endtime === exam.starttime) {
-                            score *= 1.3; // 30% bonus for continuity
-                        }
-                    }
-                    
-                    return { observer, score };
-                });
-                
-                // Sort by score (descending)
-                scoredObservers.sort((a, b) => b.score - a.score);
-                
-                // Select head and secretary with optional randomization
-                let head, secretary;
-                if (addRandomization && scoredObservers.length > 2) {
-                    // Add some randomization to selection
-                    const headCandidates = scoredObservers.slice(0, Math.min(3, scoredObservers.length));
-                    const headIndex = Math.floor(Math.random() * headCandidates.length);
-                    head = headCandidates[headIndex].observer;
-                } else {
-                    head = scoredObservers[0].observer;
-                }
-                
-                // Filter out head observer and resort for secretary selection
-                const secretaryCandidates = scoredObservers
-                    .filter(o => o.observer.observerid !== head.observerid)
-                    .map(o => ({
-                        observer: o.observer,
-                        score: o.score * (o.observer.title?.toLowerCase().includes('dr') ? 0.9 : 1) // Slightly discourage using Dr. as secretary
-                    }))
-                    .sort((a, b) => b.score - a.score);
-                
-                if (addRandomization && secretaryCandidates.length > 2) {
-                    const secCandidates = secretaryCandidates.slice(0, Math.min(3, secretaryCandidates.length));
-                    const secIndex = Math.floor(Math.random() * secCandidates.length);
-                    secretary = secCandidates[secIndex].observer;
-                } else {
-                    secretary = secretaryCandidates[0].observer;
-                }
-                
-                chromosome.push({
-                    examId: exam.examid,
-                    headId: head.observerid,
-                    secretaryId: secretary.observerid
-                });
-                
-                // Update usage tracking
-                this.updateObserverUsage(observerUsage, head.observerid, exam);
-                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
-                
-                // Update continuity tracking
-                observerContinuity.set(head.observerid, {
-                    date: exam.examdate,
-                    endtime: exam.endtime
-                });
-                observerContinuity.set(secretary.observerid, {
-                    date: exam.examdate,
-                    endtime: exam.endtime
-                });
-                
-                // Mark exam as processed
-                processedExams.add(exam.examid);
-            } else {
-                // No valid assignment
-                chromosome.push({
-                    examId: exam.examid,
-                    headId: null,
-                    secretaryId: null
-                });
-                
-                // Mark exam as processed
-                processedExams.add(exam.examid);
-            }
-        }
-        
-        return chromosome;
-    }
-
-    /**
-     * Create a workload-balanced chromosome
-     */
-    createWorkloadBalancedChromosome(data, addRandomization = false) {
-        const chromosome = [];
-        const observerUsage = new Map();
-        const observerWorkload = new Map();
-        const processedExams = new Set(); // Track processed exams to prevent duplicates
-        
-        // Initialize workload tracking
-        data.observers.forEach(observer => {
-            observerWorkload.set(observer.observerid, 0);
-        });
-        
-        // Sort exams by date and time
-        const sortedExams = [...data.exams].sort((a, b) => {
-            const dateCompare = new Date(a.examdate) - new Date(b.examdate);
-            if (dateCompare !== 0) return dateCompare;
-            return a.starttime.localeCompare(b.starttime);
-        });
-        
-        for (const exam of sortedExams) {
-            // Skip if we've already processed this exam
-            if (processedExams.has(exam.examid)) {
-                continue;
-            }
-            
-            const availableObservers = this.getAvailableObserversForExam(
-                exam, 
-                data.observers, 
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                // Score observers by workload balance - DIFFERENT APPROACH
-                const scoredObservers = availableObservers.map(observer => {
-                    const currentWorkload = observerWorkload.get(observer.observerid) || 0;
-                    const totalWorkload = observerUsage.get(observer.observerid)?.length || 0;
-                    const totalLoad = currentWorkload + totalWorkload;
-                    
-                    // Use exponential penalty for workload instead of linear
-                    let score = Math.exp(-totalLoad * 0.3);
-                    
-                    // Add some randomization if requested
-                    if (addRandomization) {
-                        score *= (0.7 + Math.random() * 0.6); // ±30% variation
-                    }
-                    
-                    return { observer, score, workload: totalLoad };
-                });
-                
-                // Sort by score (descending)
-                scoredObservers.sort((a, b) => b.score - a.score);
-                
-                // Select head and secretary with different logic
-                let head, secretary;
-                if (addRandomization && scoredObservers.length > 3) {
-                    // Select from top 3 candidates randomly
-                    const headCandidates = scoredObservers.slice(0, 3);
-                    const headIndex = Math.floor(Math.random() * headCandidates.length);
-                    head = headCandidates[headIndex].observer;
-                } else {
-                    head = scoredObservers[0].observer;
-                }
-                
-                const secretaryCandidates = scoredObservers
-                    .filter(o => o.observer.observerid !== head.observerid)
-                    .sort((a, b) => b.score - a.score);
-                
-                if (addRandomization && secretaryCandidates.length > 2) {
-                    const secCandidates = secretaryCandidates.slice(0, 2);
-                    const secIndex = Math.floor(Math.random() * secCandidates.length);
-                    secretary = secCandidates[secIndex].observer;
-                } else {
-                    secretary = secretaryCandidates[0].observer;
-                }
-                
-                chromosome.push({
-                    examId: exam.examid,
-                    headId: head.observerid,
-                    secretaryId: secretary.observerid
-                });
-                
-                // Update usage and workload
-                this.updateObserverUsage(observerUsage, head.observerid, exam);
-                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
-                observerWorkload.set(head.observerid, (observerWorkload.get(head.observerid) || 0) + 1);
-                observerWorkload.set(secretary.observerid, (observerWorkload.get(secretary.observerid) || 0) + 1);
-                
-                // Mark exam as processed
-                processedExams.add(exam.examid);
-            } else {
-                chromosome.push({
-                    examId: exam.examid,
-                    headId: null,
-                    secretaryId: null
-                });
-                
-                // Mark exam as processed
-                processedExams.add(exam.examid);
-            }
-        }
-        
-        return chromosome;
     }
 
     /**
@@ -784,8 +533,8 @@ class GeneticAssignmentService {
                     score /= (1 + Math.pow(sameDayExams.length, 2) * 0.2);
                     
                     // Bonus for observers with Dr. title (different from greedy)
-                    if (observer.title && observer.title.toLowerCase().includes('dr')) {
-                        score *= 1.15; // Smaller bonus than greedy
+                    if (ObserverUtils.isDoctor(observer)) {
+                        score *= GA_CONSTANTS.OBSERVER_SCORING.CONSTRAINT_AWARE_BONUS; // Smaller bonus than greedy
                     }
                     
                     // Add randomization if requested
@@ -840,7 +589,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a qualification-optimized chromosome
      */
@@ -850,10 +598,10 @@ class GeneticAssignmentService {
         
         // Categorize observers by qualification
         const drObservers = data.observers.filter(o => 
-            o.title && o.title.toLowerCase().includes('dr')
+            ObserverUtils.isDoctor(o)
         );
         const nonDrObservers = data.observers.filter(o => 
-            !o.title || !o.title.toLowerCase().includes('dr')
+            !ObserverUtils.isDoctor(o)
         );
         
         for (const exam of data.exams) {
@@ -867,10 +615,10 @@ class GeneticAssignmentService {
             if (availableObservers.length >= 2) {
                 // Separate available observers by qualification
                 const availableDr = availableObservers.filter(o => 
-                    o.title && o.title.toLowerCase().includes('dr')
+                    ObserverUtils.isDoctor(o)
                 );
                 const availableNonDr = availableObservers.filter(o => 
-                    !o.title || !o.title.toLowerCase().includes('dr')
+                    !ObserverUtils.isDoctor(o)
                 );
                 
                 let head, secretary;
@@ -921,7 +669,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a time-slot optimized chromosome
      */
@@ -1006,7 +753,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create an improved random chromosome with better constraint handling
      */
@@ -1047,8 +793,8 @@ class GeneticAssignmentService {
                     let weight = 1;
                     
                     // Prefer Dr. for head position
-                    if (observer.title && observer.title.toLowerCase().includes('dr')) {
-                        weight *= 1.3;
+                    if (ObserverUtils.isDoctor(observer)) {
+                        weight *= GA_CONSTANTS.OBSERVER_SCORING.DR_TITLE_BONUS;
                     }
                     
                     // Prefer full-time observers
@@ -1111,7 +857,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a random valid chromosome (assignment solution)
      */
@@ -1154,7 +899,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Get available observers for an exam considering constraints
      */
@@ -1208,24 +952,13 @@ class GeneticAssignmentService {
                     
                     if (slotDay !== examDayLower) return false;
                     
-                    // Convert time strings to comparable format (HH:mm)
-                    const normalizeTime = (time) => {
-                        if (!time) return null;
-                        // If already in HH:mm format, return as is
-                        if (/^\d{2}:\d{2}$/.test(time)) return time;
-                        // If in HH:mm:ss format, remove seconds
-                        if (/^\d{2}:\d{2}:\d{2}$/.test(time)) return time.substring(0, 5);
-                        return null;
-                    };
+                    // Use bulletproof time parsing
+                    const slotStartMinutes = parseTimeToMinutes(slot.starttime || slot.startTime);
+                    const slotEndMinutes = parseTimeToMinutes(slot.endtime || slot.endTime);
+                    const examStartMinutes = parseTimeToMinutes(exam.starttime);
+                    const examEndMinutes = parseTimeToMinutes(exam.endtime);
                     
-                    const slotStart = normalizeTime(slot.starttime || slot.startTime);
-                    const slotEnd = normalizeTime(slot.endtime || slot.endTime);
-                    const examStart = normalizeTime(exam.starttime);
-                    const examEnd = normalizeTime(exam.endtime);
-                    
-                    if (!slotStart || !slotEnd || !examStart || !examEnd) return false;
-                    
-                    return slotStart <= examStart && slotEnd >= examEnd;
+                    return slotStartMinutes <= examStartMinutes && slotEndMinutes >= examEndMinutes;
                 });
                 
                 if (!hasMatchingSlot) return false;
@@ -1271,7 +1004,6 @@ class GeneticAssignmentService {
         
         return availableObservers;
     }
-
     /**
      * Update observer usage tracking
      */
@@ -1288,7 +1020,6 @@ class GeneticAssignmentService {
             endtime: exam.endtime
         });
     }
-
     /**
      * Evaluate fitness of all individuals
      */
@@ -1298,7 +1029,6 @@ class GeneticAssignmentService {
             return { ...individual, fitness };
         });
     }
-
     /**
      * Calculate fitness score for a chromosome
      */
@@ -1311,10 +1041,10 @@ class GeneticAssignmentService {
         
         // PRIMARY: Make assignment coverage the dominant factor
         // A chromosome with 100% coverage should have fitness > 0.95
-        score = assignmentScore * 0.95;
+        score = assignmentScore * GA_CONSTANTS.FITNESS.PRIMARY_COVERAGE_WEIGHT;
         
         // Only add secondary factors if we have good assignment coverage
-        if (assignmentScore > 0.8) {
+        if (assignmentScore > GA_CONSTANTS.FITNESS.COVERAGE_THRESHOLD_FOR_BONUSES) {
             // 2. Workload balance score
             let workloadScore = 0;
             const observerWorkload = new Map();
@@ -1363,7 +1093,7 @@ class GeneticAssignmentService {
                     if (prevExam.examdate === currExam.examdate && 
                         prevExam.endtime === currExam.starttime) {
                         if (prev.headId === curr.headId || prev.secretaryId === curr.secretaryId) {
-                            efficiencyScore += 0.1;
+                            efficiencyScore += GA_CONSTANTS.FITNESS.EFFICIENCY_BONUS_PER_CONTINUITY;
                         }
                     }
                 }
@@ -1371,35 +1101,40 @@ class GeneticAssignmentService {
             efficiencyScore = Math.min(efficiencyScore / chromosome.length, 1);
             
             // Add small bonuses for secondary factors
-            score += 0.03 * workloadScore + 0.01 * fairnessScore + 0.01 * efficiencyScore;
+            score += GA_CONSTANTS.FITNESS.WORKLOAD_SCORE_WEIGHT * workloadScore + GA_CONSTANTS.FITNESS.FAIRNESS_SCORE_WEIGHT * fairnessScore + GA_CONSTANTS.FITNESS.EFFICIENCY_SCORE_WEIGHT * efficiencyScore;
         }
         
         // MASSIVE bonus for perfect or near-perfect coverage
-        if (assignmentScore >= 0.99) {
-            score = 1.0; // Perfect score for 99%+ coverage
-        } else if (assignmentScore >= 0.95) {
-            score = 0.98; // Very high score for 95%+ coverage
-        } else if (assignmentScore >= 0.9) {
-            score = 0.95; // High score for 90%+ coverage
-        } else if (assignmentScore >= 0.8) {
-            score = 0.9; // Good score for 80%+ coverage
+        if (assignmentScore >= GA_CONSTANTS.FITNESS.PERFECT_COVERAGE_THRESHOLD) {
+            score = GA_CONSTANTS.FITNESS.PERFECT_SCORE; // Perfect score for 99%+ coverage
+        } else if (assignmentScore >= GA_CONSTANTS.FITNESS.VERY_HIGH_COVERAGE_THRESHOLD) {
+            score = GA_CONSTANTS.FITNESS.VERY_HIGH_SCORE; // Very high score for 95%+ coverage
+        } else if (assignmentScore >= GA_CONSTANTS.FITNESS.HIGH_COVERAGE_THRESHOLD) {
+            score = GA_CONSTANTS.FITNESS.HIGH_SCORE; // High score for 90%+ coverage
+        } else if (assignmentScore >= GA_CONSTANTS.FITNESS.GOOD_COVERAGE_THRESHOLD) {
+            score = GA_CONSTANTS.FITNESS.GOOD_SCORE; // Good score for 80%+ coverage
         }
         
         // Severe penalty for very low assignment success
-        if (assignmentScore < 0.1) {
-            score *= 0.1; // 90% penalty for very low assignment success
-        } else if (assignmentScore < 0.3) {
-            score *= 0.3; // 70% penalty for low assignment success
+        if (assignmentScore < GA_CONSTANTS.FITNESS.VERY_LOW_COVERAGE_THRESHOLD) {
+            score *= GA_CONSTANTS.FITNESS.VERY_LOW_PENALTY; // 90% penalty for very low assignment success
+        } else if (assignmentScore < GA_CONSTANTS.FITNESS.LOW_COVERAGE_THRESHOLD) {
+            score *= GA_CONSTANTS.FITNESS.LOW_PENALTY; // 70% penalty for low assignment success
         }
         
         return score;
     }
-
     /**
      * Evolve population to next generation
      */
     evolvePopulation(population, data) {
         const newPopulation = [];
+        
+        // Check for stagnation
+        const recentGenerations = this.performanceMetrics.generations.slice(-15);
+        const hasStagnation = recentGenerations.length >= 10 && 
+            recentGenerations.every((gen, i) => i === 0 || 
+                Math.abs(gen.bestFitness - recentGenerations[i-1].bestFitness) < GA_CONSTANTS.STAGNATION_THRESHOLD);
         
         // Elitism - keep best individuals
         const eliteCount = Math.floor(this.populationSize * this.elitismRate);
@@ -1426,10 +1161,32 @@ class GeneticAssignmentService {
             
             // Mutation
             if (Math.random() < this.mutationRate) {
-                offspring1 = this.mutate(offspring1, data);
+                // Apply mutation strategies based on stagnation
+                if (hasStagnation) {
+                    // During stagnation, use more aggressive mutation
+                    if (Math.random() < 0.5) {
+                        this.applyBlockMutation(offspring1.chromosome, data);
+                    } else {
+                        this.applyCatastrophicMutation(offspring1.chromosome, data);
+                    }
+                } else {
+                    // Normal mutation
+                    this.applyStandardMutation(offspring1.chromosome, data);
+                }
             }
             if (Math.random() < this.mutationRate) {
-                offspring2 = this.mutate(offspring2, data);
+                // Apply mutation strategies based on stagnation
+                if (hasStagnation) {
+                    // During stagnation, use more aggressive mutation
+                    if (Math.random() < 0.5) {
+                        this.applyBlockMutation(offspring2.chromosome, data);
+                    } else {
+                        this.applyCatastrophicMutation(offspring2.chromosome, data);
+                    }
+                } else {
+                    // Normal mutation
+                    this.applyStandardMutation(offspring2.chromosome, data);
+                }
             }
             
             // New offspring are not greedy
@@ -1444,7 +1201,6 @@ class GeneticAssignmentService {
         
         return newPopulation;
     }
-
     /**
      * Tournament selection
      */
@@ -1456,7 +1212,6 @@ class GeneticAssignmentService {
         }
         return tournament.reduce((best, ind) => ind.fitness > best.fitness ? ind : best);
     }
-
     /**
      * Crossover operation - Fixed to be position-based (each position = specific exam)
      */
@@ -1472,7 +1227,7 @@ class GeneticAssignmentService {
             const exam = data.exams[i];
             
             // Randomly decide whether to swap this position
-            if (Math.random() < 0.5) {
+            if (Math.random() < GA_CONSTANTS.CROSSOVER.POSITION_SWAP_PROBABILITY) {
                 // Swap assignments for this exam
                 offspring1Chromosome.push(parent2.chromosome[i]);
                 offspring2Chromosome.push(parent1.chromosome[i]);
@@ -1497,304 +1252,6 @@ class GeneticAssignmentService {
         return [offspring1, offspring2];
     }
 
-    /**
-     * Mutation operation - Enhanced with effective mutation strategies
-     */
-    mutate(individual, data) {
-        const chromosome = [...individual.chromosome];
-        
-        // Enhanced mutation strategies to escape local optima
-        const mutationType = Math.random();
-        
-        if (mutationType < 0.4) {
-            // Standard mutation (40% chance)
-            this.applyStandardMutation(chromosome, data);
-        } else if (mutationType < 0.6) {
-            // Swap mutation - swap assignments between exams (20% chance)
-            this.applySwapMutation(chromosome, data);
-        } else if (mutationType < 0.75) {
-            // Block mutation - mutate a block of consecutive exams (15% chance)
-            this.applyBlockMutation(chromosome, data);
-        } else if (mutationType < 0.9) {
-            // Catastrophic mutation - completely reassign a random segment (15% chance)
-            this.applyCatastrophicMutation(chromosome, data);
-        } else {
-            // Complete reset mutation - completely reassign using different strategy (10% chance)
-            this.applyCompleteResetMutation(chromosome, data);
-        }
-        
-        return {
-            chromosome,
-            fitness: 0
-        };
-    }
-
-    /**
-     * Enhanced mutation strategies to escape local optima
-     */
-    applyStandardMutation(chromosome, data) {
-        // More aggressive mutation when stagnation is detected
-        const recentGenerations = this.performanceMetrics.generations.slice(-this.stagnationWindow);
-        const hasStagnation = recentGenerations.length >= 10 && 
-            recentGenerations.every((gen, i) => i === 0 || 
-                Math.abs(gen.bestFitness - recentGenerations[i-1].bestFitness) < this.stagnationThreshold);
-        
-        // Adjust mutation count based on stagnation
-        let mutationCount;
-        if (hasStagnation) {
-            // More aggressive mutation during stagnation
-            mutationCount = Math.max(3, Math.floor(this.mutationRate * chromosome.length * 0.4));
-        } else {
-            mutationCount = Math.max(1, Math.floor(this.mutationRate * chromosome.length * 0.2));
-        }
-        
-        const mutationPoints = new Set();
-        
-        while (mutationPoints.size < mutationCount) {
-            const point = Math.floor(Math.random() * chromosome.length);
-            mutationPoints.add(point);
-        }
-        
-        for (const mutationPoint of mutationPoints) {
-            const exam = data.exams[mutationPoint];
-            const currentGene = chromosome[mutationPoint];
-            
-            const observerUsage = new Map();
-            for (let idx = 0; idx < chromosome.length; idx++) {
-                const gene = chromosome[idx];
-                if (idx !== mutationPoint && gene.headId && gene.secretaryId) {
-                    this.updateObserverUsage(observerUsage, gene.headId, data.exams[idx]);
-                    this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[idx]);
-                }
-            }
-            
-            const availableObservers = this.getAvailableObserversForExam(
-                exam,
-                data.observers,
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                // More aggressive selection during stagnation
-                if (hasStagnation) {
-                    // During stagnation, prefer completely different observers
-                    const shuffled = this.shuffleArray([...availableObservers]);
-                    const head = shuffled[0];
-                    const secretary = shuffled[1];
-                    
-                    chromosome[mutationPoint] = {
-                        examId: exam.examid,
-                        headId: head.observerid,
-                        secretaryId: secretary.observerid
-                    };
-                } else {
-                    // Normal mutation logic
-                if (currentGene.headId && availableObservers.some(o => o.observerid === currentGene.headId)) {
-                    const newSecretary = availableObservers.find(o => o.observerid !== currentGene.headId);
-                    chromosome[mutationPoint] = {
-                        examId: exam.examid,
-                        headId: currentGene.headId,
-                        secretaryId: newSecretary.observerid
-                    };
-                } else if (currentGene.secretaryId && availableObservers.some(o => o.observerid === currentGene.secretaryId)) {
-                    const newHead = availableObservers.find(o => o.observerid !== currentGene.secretaryId);
-                    chromosome[mutationPoint] = {
-                        examId: exam.examid,
-                        headId: newHead.observerid,
-                        secretaryId: currentGene.secretaryId
-                    };
-                } else {
-                    const shuffled = this.shuffleArray([...availableObservers]);
-                    chromosome[mutationPoint] = {
-                        examId: exam.examid,
-                        headId: shuffled[0].observerid,
-                        secretaryId: shuffled[1].observerid
-                    };
-                    }
-                }
-            } else {
-                chromosome[mutationPoint] = {
-                    examId: exam.examid,
-                    headId: null,
-                    secretaryId: null
-                };
-            }
-        }
-    }
-
-    applySwapMutation(chromosome, data) {
-        const swapCount = Math.floor(Math.random() * 3) + 1; // 1-3 swaps
-        
-        for (let swap = 0; swap < swapCount; swap++) {
-            const i = Math.floor(Math.random() * chromosome.length);
-            const j = Math.floor(Math.random() * chromosome.length);
-            
-            if (i !== j) {
-                // Swap head observers
-                const tempHead = chromosome[i].headId;
-                chromosome[i].headId = chromosome[j].headId;
-                chromosome[j].headId = tempHead;
-                
-                // Swap secretary observers
-                const tempSecretary = chromosome[i].secretaryId;
-                chromosome[i].secretaryId = chromosome[j].secretaryId;
-                chromosome[j].secretaryId = tempSecretary;
-            }
-        }
-    }
-
-    applyInversionMutation(chromosome, data) {
-        const start = Math.floor(Math.random() * chromosome.length);
-        const length = Math.floor(Math.random() * (chromosome.length - start)) + 1;
-        const end = Math.min(start + length, chromosome.length);
-        
-        // Reverse the segment
-        for (let i = 0; i < (end - start) / 2; i++) {
-            const temp = chromosome[start + i];
-            chromosome[start + i] = chromosome[end - 1 - i];
-            chromosome[end - 1 - i] = temp;
-        }
-    }
-
-    applyBlockMutation(chromosome, data) {
-        const start = Math.floor(Math.random() * chromosome.length);
-        const blockSize = Math.floor(Math.random() * 5) + 2; // 2-6 exams
-        const end = Math.min(start + blockSize, chromosome.length);
-        
-        // Completely reassign the block
-        for (let i = start; i < end; i++) {
-            const exam = data.exams[i];
-            const observerUsage = new Map();
-            
-            // Build usage map excluding current block
-            for (let idx = 0; idx < chromosome.length; idx++) {
-                const gene = chromosome[idx];
-                if ((idx < start || idx >= end) && gene.headId && gene.secretaryId) {
-                    this.updateObserverUsage(observerUsage, gene.headId, data.exams[idx]);
-                    this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[idx]);
-                }
-            }
-            
-            const availableObservers = this.getAvailableObserversForExam(
-                exam,
-                data.observers,
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                const shuffled = this.shuffleArray([...availableObservers]);
-                chromosome[i] = {
-                    examId: exam.examid,
-                    headId: shuffled[0].observerid,
-                    secretaryId: shuffled[1].observerid
-                };
-                
-                this.updateObserverUsage(observerUsage, shuffled[0].observerid, exam);
-                this.updateObserverUsage(observerUsage, shuffled[1].observerid, exam);
-            }
-        }
-    }
-
-    applyCatastrophicMutation(chromosome, data) {
-        const segmentSize = Math.floor(chromosome.length * 0.3); // 30% of chromosome
-        const start = Math.floor(Math.random() * (chromosome.length - segmentSize));
-        
-        // Clear the segment
-        for (let i = start; i < start + segmentSize; i++) {
-            chromosome[i] = {
-                examId: data.exams[i].examid,
-                headId: null,
-                secretaryId: null
-            };
-        }
-        
-        // Reassign using a different strategy
-        for (let i = start; i < start + segmentSize; i++) {
-            const exam = data.exams[i];
-            const observerUsage = new Map();
-            
-            // Build usage map excluding current segment
-            for (let idx = 0; idx < chromosome.length; idx++) {
-                const gene = chromosome[idx];
-                if ((idx < start || idx >= start + segmentSize) && gene.headId && gene.secretaryId) {
-                    this.updateObserverUsage(observerUsage, gene.headId, data.exams[idx]);
-                    this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[idx]);
-                }
-            }
-            
-            const availableObservers = this.getAvailableObserversForExam(
-                exam,
-                data.observers,
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                // Use a different selection strategy for variety
-                const headIndex = Math.floor(Math.random() * Math.min(3, availableObservers.length));
-                const head = availableObservers[headIndex];
-                
-                const secretaryCandidates = availableObservers.filter(o => o.observerid !== head.observerid);
-                const secretaryIndex = Math.floor(Math.random() * Math.min(2, secretaryCandidates.length));
-                const secretary = secretaryCandidates[secretaryIndex];
-                
-                chromosome[i] = {
-                    examId: exam.examid,
-                    headId: head.observerid,
-                    secretaryId: secretary.observerid
-                };
-                
-                this.updateObserverUsage(observerUsage, head.observerid, exam);
-                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
-            }
-        }
-    }
-
-    // Removed complex mutation strategies to simplify the algorithm
-
-    applyCompleteResetMutation(chromosome, data) {
-        const observerUsage = new Map();
-        
-        // Shuffle exams for random processing order
-        const shuffledExams = this.shuffleArray([...data.exams]);
-        
-        for (let i = 0; i < shuffledExams.length; i++) {
-            const exam = shuffledExams[i];
-            const originalIndex = data.exams.findIndex(e => e.examid === exam.examid);
-            
-            // Get available observers but with high randomization
-            const availableObservers = this.getAvailableObserversForExam(
-                exam, 
-                data.observers, 
-                observerUsage,
-                data.conflicts
-            );
-            
-            if (availableObservers.length >= 2) {
-                // Completely random selection from available observers
-                const shuffled = this.shuffleArray([...availableObservers]);
-                const head = shuffled[0];
-                const secretary = shuffled[1];
-                
-                chromosome[originalIndex] = {
-                    examId: exam.examid,
-                    headId: head.observerid,
-                    secretaryId: secretary.observerid
-                };
-                
-                this.updateObserverUsage(observerUsage, head.observerid, exam);
-                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
-            } else {
-                chromosome[originalIndex] = {
-                    examId: exam.examid,
-                    headId: null,
-                    secretaryId: null
-                };
-            }
-        }
-    }
 
     /**
      * Inject diversity into population to escape local optima
@@ -1806,44 +1263,23 @@ class GeneticAssignmentService {
         // Sort by fitness to keep best individuals
         newPopulation.sort((a, b) => b.fitness - a.fitness);
         
-        // Replace worst individuals with diverse new ones
+        // Replace worst individuals with diverse new ones using chromosome service
+        const diversityChromosomes = this.chromosomeService.createDiversityChromosomes(data, injectionCount);
+        
         for (let i = 0; i < injectionCount; i++) {
             const replacementIndex = newPopulation.length - 1 - i;
+            const validatedChromosome = this.validateAndRepairChromosome(diversityChromosomes[i].chromosome, data);
             
-            // Create diverse individual using different strategies
-            const strategy = i % 5;
-            let newChromosome;
-            
-            switch (strategy) {
-                case 0:
-                    newChromosome = this.createCompletelyRandomChromosome(data);
-                    break;
-                case 1:
-                    newChromosome = this.createForceAssignmentChromosome(data);
-                    break;
-                case 2:
-                    newChromosome = this.createObserverRotationChromosome(data, i);
-                    break;
-                case 3:
-                    newChromosome = this.createTimeSlotRandomChromosome(data, i);
-                    break;
-                case 4:
-                    newChromosome = this.createConflictTolerantChromosome(data);
-                    break;
-            }
-            
-            const validatedChromosome = this.validateAndRepairChromosome(newChromosome, data);
             newPopulation[replacementIndex] = {
                 chromosome: validatedChromosome,
                 fitness: 0,
                 isGreedy: false,
-                strategy: `diversity-injection-${strategy}`
+                strategy: diversityChromosomes[i].strategy
             };
         }
         
         return newPopulation;
     }
-
     /**
      * Create diverse restart population with different strategies
      */
@@ -1858,7 +1294,7 @@ class GeneticAssignmentService {
                 // Use completely different approaches
                 // 1. Force assignment strategy - assign even if conflicts exist, then repair
                 for (let i = 0; i < Math.floor(populationSize * 0.2); i++) {
-                    const chromosome = this.createForceAssignmentChromosome(data);
+                    const chromosome = this.chromosomeService.createForceAssignmentChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1869,7 +1305,7 @@ class GeneticAssignmentService {
                 
                 // 2. Observer preference strategy - prioritize different observers
                 for (let i = 0; i < Math.floor(populationSize * 0.2); i++) {
-                    const chromosome = this.createObserverPreferenceChromosome(data, i % data.observers.length);
+                    const chromosome = this.chromosomeService.createObserverPreferenceChromosome(data, i % data.observers.length);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1880,7 +1316,7 @@ class GeneticAssignmentService {
                 
                 // 3. Time-based strategy - focus on specific time slots
                 for (let i = 0; i < Math.floor(populationSize * 0.2); i++) {
-                    const chromosome = this.createTimeBasedChromosome(data, i % 24); // Different hours
+                    const chromosome = this.chromosomeService.createTimeBasedChromosome(data, i % 24); // Different hours
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1891,7 +1327,7 @@ class GeneticAssignmentService {
                 
                 // 4. Conflict-tolerant strategy - allow some conflicts
                 for (let i = 0; i < Math.floor(populationSize * 0.2); i++) {
-                    const chromosome = this.createConflictTolerantChromosome(data);
+                    const chromosome = this.chromosomeService.createConflictTolerantChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1902,7 +1338,7 @@ class GeneticAssignmentService {
                 
                 // 5. Fill rest with completely random
                 while (population.length < populationSize) {
-                    const chromosome = this.createCompletelyRandomChromosome(data);
+                    const chromosome = this.chromosomeService.createCompletelyRandomChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1916,7 +1352,7 @@ class GeneticAssignmentService {
                 // Focus on high diversity random generation
                 // 1. 50% completely random
                 for (let i = 0; i < Math.floor(populationSize * 0.5); i++) {
-                    const chromosome = this.createCompletelyRandomChromosome(data);
+                    const chromosome = this.chromosomeService.createCompletelyRandomChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1927,7 +1363,7 @@ class GeneticAssignmentService {
                 
                 // 2. 30% random with observer rotation
                 for (let i = 0; i < Math.floor(populationSize * 0.3); i++) {
-                    const chromosome = this.createObserverRotationChromosome(data, i);
+                    const chromosome = this.chromosomeService.createObserverRotationChromosome(data, i);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1938,7 +1374,7 @@ class GeneticAssignmentService {
                 
                 // 3. 20% random with time slot focus
                 for (let i = 0; i < Math.floor(populationSize * 0.2); i++) {
-                    const chromosome = this.createTimeSlotRandomChromosome(data, i);
+                    const chromosome = this.chromosomeService.createTimeSlotRandomChromosome(data, i);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1952,7 +1388,7 @@ class GeneticAssignmentService {
                 // Mix of aggressive strategies
                 // 1. 25% force assignment
                 for (let i = 0; i < Math.floor(populationSize * 0.25); i++) {
-                    const chromosome = this.createForceAssignmentChromosome(data);
+                    const chromosome = this.chromosomeService.createForceAssignmentChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1963,7 +1399,7 @@ class GeneticAssignmentService {
                 
                 // 2. 25% conflict tolerant
                 for (let i = 0; i < Math.floor(populationSize * 0.25); i++) {
-                    const chromosome = this.createConflictTolerantChromosome(data);
+                    const chromosome = this.chromosomeService.createConflictTolerantChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1974,7 +1410,7 @@ class GeneticAssignmentService {
                 
                 // 3. 25% observer preference
                 for (let i = 0; i < Math.floor(populationSize * 0.25); i++) {
-                    const chromosome = this.createObserverPreferenceChromosome(data, i % data.observers.length);
+                    const chromosome = this.chromosomeService.createObserverPreferenceChromosome(data, i % data.observers.length);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -1985,7 +1421,7 @@ class GeneticAssignmentService {
                 
                 // 4. 25% completely random
                 for (let i = 0; i < Math.floor(populationSize * 0.25); i++) {
-                    const chromosome = this.createCompletelyRandomChromosome(data);
+                    const chromosome = this.chromosomeService.createCompletelyRandomChromosome(data);
                     population.push({ 
                         chromosome, 
                         fitness: 0, 
@@ -2011,7 +1447,6 @@ class GeneticAssignmentService {
         
         return population;
     }
-
     /**
      * Create a highly randomized chromosome for restart scenarios
      */
@@ -2076,7 +1511,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a force assignment chromosome - assign observers even if conflicts exist
      */
@@ -2131,7 +1565,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a chromosome with observer preference strategy
      */
@@ -2183,7 +1616,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a time-based chromosome focusing on specific hours
      */
@@ -2194,8 +1626,8 @@ class GeneticAssignmentService {
         
         // Sort exams by how close they are to the focus hour
         const sortedExams = [...data.exams].sort((a, b) => {
-            const hourA = parseInt(a.starttime.split(':')[0]);
-            const hourB = parseInt(b.starttime.split(':')[0]);
+            const hourA = Math.floor(parseTimeToMinutes(a.starttime) / 60);
+            const hourB = Math.floor(parseTimeToMinutes(b.starttime) / 60);
             const distanceA = Math.abs(hourA - focusHour);
             const distanceB = Math.abs(hourB - focusHour);
             return distanceA - distanceB; // Closest to focus hour first
@@ -2237,7 +1669,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a conflict-tolerant chromosome that allows some conflicts
      */
@@ -2292,7 +1723,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a completely random chromosome that respects basic constraints
      */
@@ -2337,7 +1767,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a chromosome with observer rotation strategy
      */
@@ -2387,7 +1816,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Create a random chromosome with time slot focus
      */
@@ -2446,7 +1874,6 @@ class GeneticAssignmentService {
         
         return chromosome;
     }
-
     /**
      * Validate and repair chromosome to ensure validity and uniqueness
      */
@@ -2483,7 +1910,6 @@ class GeneticAssignmentService {
         // Now repair the chromosome to ensure all assignments are valid
         return this.repairChromosome(cleanChromosome, data);
     }
-
     /**
      * Repair chromosome to ensure validity
      */
@@ -2550,7 +1976,6 @@ class GeneticAssignmentService {
         
         return repairedChromosome;
     }
-
     /**
      * Check if observer is available for exam
      */
@@ -2768,87 +2193,28 @@ class GeneticAssignmentService {
      */
     async savePerformanceReport(results, data) {
         try {
-            const reportsDir = path.join(__dirname, '../../performance-reports');
-            await fs.mkdir(reportsDir, { recursive: true });
+            const MetricsService = require('./metricsService');
             
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `ga-assignment-performance-${timestamp}.json`;
-            const filepath = path.join(reportsDir, filename);
+            // Calculate execution time
+            const executionTime = Date.now() - this.performanceMetrics.startTime;
             
-            // Prepare assignments array for quality metrics
-            // Get the best solution's chromosome which contains the actual assignments
-            const bestChromosome = this.performanceMetrics.bestSolution || results.performance.bestSolution;
-            const assignments = data.exams.map((exam, idx) => {
-                const successfulAssignment = results.successful.find(s => s.examId === exam.examid);
-                if (successfulAssignment) {
-                    // Find the actual observer IDs from the results
-                    const headObserver = data.observers.find(o => o.name === successfulAssignment.head);
-                    const secretaryObserver = data.observers.find(o => o.name === successfulAssignment.secretary);
-                    return {
-                        examId: exam.examid,
-                        headId: headObserver?.observerid || null,
-                        secretaryId: secretaryObserver?.observerid || null
-                    };
-                } else {
-                    return {
-                        examId: exam.examid,
-                        headId: null,
-                        secretaryId: null
-                    };
-                }
+            // Save metrics using central service
+            await MetricsService.saveMetrics('genetic', results, data, {
+                executionTime,
+                populationSize: this.populationSize,
+                generations: this.generations,
+                mutationRate: this.mutationRate,
+                crossoverRate: this.crossoverRate,
+                elitismRate: this.elitismRate,
+                finalFitness: results.performance.finalFitness,
+                convergenceData: this.performanceMetrics.generations
             });
             
-            // Calculate quality metrics
-            const qualityMetrics = AssignmentQualityMetrics.calculateMetrics(
-                assignments,
-                data.exams,
-                data.observers
-            );
-            
-            const report = {
-                timestamp: new Date().toISOString(),
-                algorithm: 'genetic',
-                parameters: {
-                    populationSize: this.populationSize,
-                    generations: this.generations,
-                    mutationRate: this.mutationRate,
-                    crossoverRate: this.crossoverRate,
-                    elitismRate: this.elitismRate
-                },
-                examCount: data.exams.length,
-                observerCount: data.observers.length,
-                successfulAssignments: results.successful.length,
-                failedAssignments: results.failed.length,
-                finalFitness: results.performance.finalFitness,
-                convergenceData: this.performanceMetrics.generations,
-                totalTimeMs: Date.now() - this.performanceMetrics.startTime,
-                examsPerSecond: (data.exams.length / ((Date.now() - this.performanceMetrics.startTime) / 1000)).toFixed(2),
-                qualityMetrics: qualityMetrics,
-                results
-            };
-            
-            await fs.writeFile(filepath, JSON.stringify(report, null, 2));
-            
-            // Append to summary
-            const summaryFile = path.join(reportsDir, 'performance-summary.jsonl');
-            const summaryLine = JSON.stringify({
-                timestamp: report.timestamp,
-                algorithm: 'genetic',
-                examCount: report.examCount,
-                successRate: ((results.successful.length / data.exams.length) * 100).toFixed(1),
-                fitness: results.performance.finalFitness.toFixed(3),
-                totalTimeMs: report.totalTimeMs,
-                examsPerSecond: report.examsPerSecond,
-                qualityScore: qualityMetrics.overallScore.percentage.toFixed(1),
-                qualityGrade: qualityMetrics.overallScore.grade
-            }) + '\n';
-            
-            await fs.appendFile(summaryFile, summaryLine);
+            console.log('GA performance metrics saved successfully');
         } catch (error) {
             console.error('Error saving GA performance report:', error);
         }
     }
-
     /**
      * Utility: Shuffle array
      */
@@ -2859,6 +2225,157 @@ class GeneticAssignmentService {
             [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
         return shuffled;
+    }
+
+    /**
+     * Standard mutation - makes small changes to the chromosome
+     */
+    applyStandardMutation(chromosome, data) {
+        // Determine number of mutations based on chromosome length
+        const mutationCount = Math.max(1, Math.floor(chromosome.length * 0.1));
+        
+        for (let i = 0; i < mutationCount; i++) {
+            const examIndex = Math.floor(Math.random() * chromosome.length);
+            const exam = data.exams[examIndex];
+            
+            // Build observer usage map excluding current exam
+            const observerUsage = new Map();
+            for (let j = 0; j < chromosome.length; j++) {
+                if (j !== examIndex && chromosome[j].headId && chromosome[j].secretaryId) {
+                    this.updateObserverUsage(observerUsage, chromosome[j].headId, data.exams[j]);
+                    this.updateObserverUsage(observerUsage, chromosome[j].secretaryId, data.exams[j]);
+                }
+            }
+            
+            // Get available observers
+            const availableObservers = this.getAvailableObserversForExam(
+                exam,
+                data.observers,
+                observerUsage,
+                data.conflicts
+            );
+            
+            if (availableObservers.length >= 2) {
+                // Randomly decide whether to change head or secretary or both
+                const changeType = Math.random();
+                if (changeType < 0.4) { // 40% chance to change head
+                    const newHead = availableObservers[Math.floor(Math.random() * availableObservers.length)];
+                    chromosome[examIndex].headId = newHead.observerid;
+                } else if (changeType < 0.8) { // 40% chance to change secretary
+                    const newSecretary = availableObservers[Math.floor(Math.random() * availableObservers.length)];
+                    chromosome[examIndex].secretaryId = newSecretary.observerid;
+                } else { // 20% chance to change both
+                    const shuffled = this.shuffleArray([...availableObservers]);
+                    if (shuffled.length >= 2) {
+                        chromosome[examIndex].headId = shuffled[0].observerid;
+                        chromosome[examIndex].secretaryId = shuffled[1].observerid;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Block mutation - mutates a block of consecutive exams
+     */
+    applyBlockMutation(chromosome, data) {
+        const blockSize = Math.floor(Math.random() * 5) + 2; // 2-6 exams
+        const start = Math.floor(Math.random() * (chromosome.length - blockSize));
+        const end = start + blockSize;
+        
+        // Build initial observer usage map excluding the block
+        const observerUsage = new Map();
+        for (let i = 0; i < chromosome.length; i++) {
+            if (i < start || i >= end) {
+                const gene = chromosome[i];
+                if (gene.headId && gene.secretaryId) {
+                    this.updateObserverUsage(observerUsage, gene.headId, data.exams[i]);
+                    this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[i]);
+                }
+            }
+        }
+        
+        // Reassign the block
+        for (let i = start; i < end; i++) {
+            const exam = data.exams[i];
+            const availableObservers = this.getAvailableObserversForExam(
+                exam,
+                data.observers,
+                observerUsage,
+                data.conflicts
+            );
+            
+            if (availableObservers.length >= 2) {
+                const shuffled = this.shuffleArray([...availableObservers]);
+                chromosome[i] = {
+                    examId: exam.examid,
+                    headId: shuffled[0].observerid,
+                    secretaryId: shuffled[1].observerid
+                };
+                
+                this.updateObserverUsage(observerUsage, shuffled[0].observerid, exam);
+                this.updateObserverUsage(observerUsage, shuffled[1].observerid, exam);
+            }
+        }
+    }
+
+    /**
+     * Catastrophic mutation - completely reassigns a large portion of the chromosome
+     */
+    applyCatastrophicMutation(chromosome, data) {
+        const segmentSize = Math.floor(chromosome.length * 0.3); // 30% of chromosome
+        const start = Math.floor(Math.random() * (chromosome.length - segmentSize));
+        
+        // Clear the segment
+        for (let i = start; i < start + segmentSize; i++) {
+            chromosome[i] = {
+                examId: data.exams[i].examid,
+                headId: null,
+                secretaryId: null
+            };
+        }
+        
+        // Build observer usage map excluding the segment
+        const observerUsage = new Map();
+        for (let i = 0; i < chromosome.length; i++) {
+            if (i < start || i >= start + segmentSize) {
+                const gene = chromosome[i];
+                if (gene.headId && gene.secretaryId) {
+                    this.updateObserverUsage(observerUsage, gene.headId, data.exams[i]);
+                    this.updateObserverUsage(observerUsage, gene.secretaryId, data.exams[i]);
+                }
+            }
+        }
+        
+        // Reassign using a different strategy
+        for (let i = start; i < start + segmentSize; i++) {
+            const exam = data.exams[i];
+            const availableObservers = this.getAvailableObserversForExam(
+                exam,
+                data.observers,
+                observerUsage,
+                data.conflicts
+            );
+            
+            if (availableObservers.length >= 2) {
+                // Use a different selection strategy for variety
+                const headIndex = Math.floor(Math.random() * Math.min(3, availableObservers.length));
+                const head = availableObservers[headIndex];
+                
+                const secretaryCandidates = availableObservers.filter(o => o.observerid !== head.observerid);
+                const secretaryIndex = Math.floor(Math.random() * Math.min(2, secretaryCandidates.length));
+                const secretary = secretaryCandidates[secretaryIndex];
+                
+                chromosome[i] = {
+                    examId: exam.examid,
+                    headId: head.observerid,
+                    secretaryId: secretary.observerid
+                };
+                
+                this.updateObserverUsage(observerUsage, head.observerid, exam);
+                this.updateObserverUsage(observerUsage, secretary.observerid, exam);
+            }
+        }
     }
 
     // Removed island model and complex restart mechanisms to simplify the algorithm
@@ -2903,7 +2420,6 @@ class GeneticAssignmentService {
         
         return sortedPopulation;
     }
-
     /**
      * Local search to improve individual solutions
      */
@@ -2934,7 +2450,6 @@ class GeneticAssignmentService {
         
         return individual;
     }
-
     /**
      * Generate neighboring solutions for local search
      */
@@ -2942,22 +2457,49 @@ class GeneticAssignmentService {
         const neighbors = [];
         const chromosome = individual.chromosome;
         
-        // Strategy 1: Try swapping assignments between exams
-        for (let i = 0; i < chromosome.length; i++) {
-            for (let j = i + 1; j < Math.min(i + 10, chromosome.length); j++) { // Limit to nearby exams
-                const neighbor = this.createSwapNeighbor(chromosome, i, j, data);
-                neighbors.push(neighbor);
-            }
+        // Generate neighbors using different mutation strategies
+        // 1. Standard mutation
+        for (let i = 0; i < 3; i++) {
+            const mutatedChromosome = [...chromosome];
+            this.applyStandardMutation(mutatedChromosome, data);
+            neighbors.push({
+                ...individual,
+                chromosome: mutatedChromosome,
+                isGreedy: false,
+                strategy: 'local-search-standard'
+            });
         }
         
-        // Strategy 2: Try changing individual observers
+        // 2. Block mutation
+        for (let i = 0; i < 2; i++) {
+            const mutatedChromosome = [...chromosome];
+            this.applyBlockMutation(mutatedChromosome, data);
+            neighbors.push({
+                ...individual,
+                chromosome: mutatedChromosome,
+                isGreedy: false,
+                strategy: 'local-search-block'
+            });
+        }
+        
+        // 3. Catastrophic mutation (less frequently)
+        const mutatedChromosome = [...chromosome];
+        this.applyCatastrophicMutation(mutatedChromosome, data);
+        neighbors.push({
+            ...individual,
+            chromosome: mutatedChromosome,
+            isGreedy: false,
+            strategy: 'local-search-catastrophic'
+        });
+        
+        // Try targeted observer changes
         for (let i = 0; i < chromosome.length; i++) {
             const exam = data.exams[i];
             const currentGene = chromosome[i];
             
             // Try changing head observer
             const availableHeads = this.getAvailableObserversForExam(exam, data.observers, new Map(), data.conflicts);
-            for (const head of availableHeads.slice(0, 3)) { // Try first 3 options
+            for (const head of availableHeads.slice(0, 3)) {
                 if (head.observerid !== currentGene.headId) {
                     const neighbor = this.createChangeNeighbor(chromosome, i, 'head', head.observerid, data);
                     neighbors.push(neighbor);
@@ -2975,7 +2517,6 @@ class GeneticAssignmentService {
         
         return neighbors;
     }
-
     /**
      * Create a neighbor by swapping assignments between two exams
      */
@@ -2997,7 +2538,6 @@ class GeneticAssignmentService {
         
         return neighbor;
     }
-
     /**
      * Create a neighbor by changing one observer assignment
      */

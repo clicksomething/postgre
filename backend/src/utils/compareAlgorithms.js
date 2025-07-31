@@ -8,93 +8,95 @@ const AssignmentQualityMetrics = require('./assignmentQualityMetrics');
 
 class AlgorithmComparison {
     /**
-     * Load and compare the most recent reports from both algorithms
+     * Load and compare the most recent reports from all algorithms
      */
     static async compareLatestReports() {
         try {
-            const reportsDir = path.join(__dirname, '../../performance-reports');
-            console.log('Looking for reports in:', reportsDir);
+            const MetricsService = require('../services/metricsService');
             
-            const files = await fs.readdir(reportsDir);
-            console.log('All files found:', files.length);
+            // Get comparison data from metrics service
+            const metricsData = await MetricsService.compareMetrics();
             
-            // Find latest reports for each algorithm
-            const randomReports = files.filter(f => f.startsWith('assignment-performance-'));
-            const gaReports = files.filter(f => f.startsWith('ga-assignment-performance-'));
-            
-            console.log('Random reports found:', randomReports.length);
-            console.log('GA reports found:', gaReports.length);
-            
-            if (randomReports.length === 0 || gaReports.length === 0) {
-                console.log('Not enough reports to compare. Run both algorithms first.');
+            if (!metricsData || Object.keys(metricsData).length === 0) {
+                console.log('No reports found to compare. Run algorithms first.');
                 return null;
             }
             
-            // Sort by timestamp (newest first)
-            randomReports.sort().reverse();
-            gaReports.sort().reverse();
+            // Build a new comparison object with consistent structure
+            const comparison = {};
+            const scores = {};
+            const performance = {};
             
-            // Load latest reports
-            const randomReport = JSON.parse(
-                await fs.readFile(path.join(reportsDir, randomReports[0]), 'utf8')
-            );
-            const gaReport = JSON.parse(
-                await fs.readFile(path.join(reportsDir, gaReports[0]), 'utf8')
-            );
+            // Extract data from metrics, handling missing properties safely
+            Object.entries(metricsData).forEach(([algo, data]) => {
+                if (algo !== 'improvements' && algo !== 'summary') {
+                    // Parse score, removing '%' if present
+                    const scoreStr = (data.overallScore || '0%').replace('%', '');
+                    scores[algo] = parseFloat(scoreStr) || 0;
+                    
+                    // Extract performance data safely
+                    performance[algo] = {
+                        totalTimeMs: data.performance?.totalTimeMs || 0,
+                        examsPerSecond: data.performance?.examsPerSecond || 0
+                    };
+                    
+                    // Build standardized comparison entry
+                    comparison[algo] = {
+                        overallScore: data.overallScore || '0%',
+                        coverage: data.coverage || '0%',
+                        workloadBalance: data.workloadBalance || '0',
+                        fairness: data.fairness || '0',
+                        efficiency: data.efficiency || '0%',
+                        grade: data.grade || 'F',
+                        performance: performance[algo]
+                    };
+                }
+            });
             
-            console.log('Random report keys:', Object.keys(randomReport));
-            console.log('GA report keys:', Object.keys(gaReport));
-            console.log('Random qualityMetrics exists:', !!randomReport.qualityMetrics);
-            console.log('GA qualityMetrics exists:', !!gaReport.qualityMetrics);
-            
-            // Check if reports have qualityMetrics
-            if (!randomReport.qualityMetrics || !gaReport.qualityMetrics) {
-                console.log('\n⚠️  One or both reports lack qualityMetrics. These may be old reports.');
-                console.log('Please run both algorithms again to generate new reports with quality metrics.');
-                console.log('\nTo regenerate reports:');
-                console.log('1. Click "Distribute" to run the Random algorithm');
-                console.log('2. Click "Compare Algorithms" and wait for both algorithms to complete');
+            // If no valid algorithms found, return null
+            if (Object.keys(comparison).length === 0) {
+                console.log('No valid algorithm data found');
                 return null;
             }
             
-            // Compare quality metrics
-            const comparison = AssignmentQualityMetrics.compareResults(
-                randomReport.qualityMetrics,
-                gaReport.qualityMetrics,
-                'Random Algorithm',
-                'Genetic Algorithm'
-            );
-            
-            console.log('Comparison object from AssignmentQualityMetrics:', JSON.stringify(comparison, null, 2));
-            
-            if (!comparison) {
-                console.error('AssignmentQualityMetrics.compareResults returned null/undefined');
-                return null;
-            }
-            
-            // Add performance comparison
-            comparison.performance = {
-                'Random Algorithm': {
-                    totalTimeMs: randomReport.performance.totalTimeMs,
-                    examsPerSecond: randomReport.performance.examsPerSecond
-                },
-                'Genetic Algorithm': {
-                    totalTimeMs: gaReport.totalTimeMs,
-                    examsPerSecond: gaReport.examsPerSecond
-                },
-                speedup: (randomReport.performance.totalTimeMs / gaReport.totalTimeMs).toFixed(2) + 'x slower'
-            };
-            
-            console.log('Comparison object after adding performance:', JSON.stringify(comparison, null, 2));
-            
-            // Add summary
+            // Add recommendation
             comparison.summary = {
-                examCount: randomReport.examCount,
-                observerCount: randomReport.observerCount,
-                recommendation: this.getRecommendation(comparison)
+                examCount: metricsData[Object.keys(metricsData)[0]]?.examCount || 0,
+                observerCount: metricsData[Object.keys(metricsData)[0]]?.observerCount || 0,
+                recommendation: this.getRecommendationForThreeWayComparison(scores, performance)
             };
             
+            // Calculate speed comparisons only for algorithms with timing data
+            const algorithms = Object.keys(performance)
+                .filter(k => performance[k].totalTimeMs > 0);
+            
+            comparison.speedComparison = {};
+            
+            for (let i = 0; i < algorithms.length; i++) {
+                for (let j = i + 1; j < algorithms.length; j++) {
+                    const algo1 = algorithms[i];
+                    const algo2 = algorithms[j];
+                    const time1 = performance[algo1].totalTimeMs;
+                    const time2 = performance[algo2].totalTimeMs;
+                    
+                    if (time1 > 0 && time2 > 0) {
+                        comparison.speedComparison[`${algo2} vs ${algo1}`] = time2 < time1
+                            ? `${(time1 / time2).toFixed(1)}x faster`
+                            : `${(time2 / time1).toFixed(1)}x slower`;
+                    }
+                }
+            }
+            
+            // Determine winner from valid scores
+            const validScores = Object.entries(scores).filter(([_, score]) => score > 0);
+            if (validScores.length > 0) {
+                const winner = validScores.reduce((a, b) => a[1] > b[1] ? a : b)[0];
+                comparison.winner = winner;
+            }
+            
+            console.log('Comparison completed successfully');
             return comparison;
+            
         } catch (error) {
             console.error('Error comparing reports:', error);
             return null;
@@ -201,37 +203,13 @@ class AlgorithmComparison {
      */
     static async analyzeSummaryTrends() {
         try {
-            const summaryFile = path.join(__dirname, '../../performance-reports/performance-summary.jsonl');
-            const content = await fs.readFile(summaryFile, 'utf8');
-            const lines = content.trim().split('\n').filter(line => line);
+            const MetricsService = require('../services/metricsService');
+            const trends = await MetricsService.getPerformanceTrends();
             
-            const summaries = lines.map(line => JSON.parse(line));
-            
-            // Group by algorithm
-            const randomSummaries = summaries.filter(s => s.algorithm === 'random');
-            const gaSummaries = summaries.filter(s => s.algorithm === 'genetic');
-            
-            // Calculate averages
-            const calculateAverage = (items, field) => {
-                if (items.length === 0) return 0;
-                return items.reduce((sum, item) => sum + parseFloat(item[field] || 0), 0) / items.length;
-            };
-            
-            const trends = {
-                random: {
-                    count: randomSummaries.length,
-                    avgSuccessRate: calculateAverage(randomSummaries, 'successRate').toFixed(1),
-                    avgQualityScore: calculateAverage(randomSummaries, 'qualityScore').toFixed(1),
-                    avgExamsPerSecond: calculateAverage(randomSummaries, 'examsPerSecond').toFixed(1)
-                },
-                genetic: {
-                    count: gaSummaries.length,
-                    avgSuccessRate: calculateAverage(gaSummaries, 'successRate').toFixed(1),
-                    avgQualityScore: calculateAverage(gaSummaries, 'qualityScore').toFixed(1),
-                    avgExamsPerSecond: calculateAverage(gaSummaries, 'examsPerSecond').toFixed(1),
-                    avgFitness: calculateAverage(gaSummaries, 'fitness').toFixed(3)
-                }
-            };
+            if (!trends) {
+                console.log('No trend data available. Run algorithms first.');
+                return null;
+            }
             
             console.log('\n=== Algorithm Performance Trends ===\n');
             console.table(trends);
@@ -325,6 +303,43 @@ class AlgorithmComparison {
         }
     }
 
+    static extractAlgorithmMetrics(report) {
+        // Extract common metrics
+        const metrics = {
+            overallScore: '0%',
+            coverage: '0%',
+            workloadBalance: '0',
+            fairness: '0',
+            efficiency: '0%',
+            grade: 'F',
+            totalTimeMs: 0,
+            examsPerSecond: 0
+        };
+
+        // Extract quality metrics if available
+        if (report.qualityMetrics) {
+            metrics.overallScore = report.qualityMetrics.overallScore?.percentage?.toFixed(1) + '%' || '0%';
+            metrics.coverage = report.qualityMetrics.coverage?.percentage?.toFixed(1) + '%' || '0%';
+            metrics.workloadBalance = report.qualityMetrics.workloadBalance?.score?.toFixed(3) || '0';
+            metrics.fairness = report.qualityMetrics.fairness?.score?.toFixed(3) || '0';
+            metrics.efficiency = report.qualityMetrics.efficiency?.percentage?.toFixed(1) + '%' || '0%';
+            metrics.grade = report.qualityMetrics.overallScore?.grade || 'F';
+        }
+
+        // Extract performance metrics based on algorithm type
+        if (report.performance) {
+            // Random algorithm structure
+            metrics.totalTimeMs = report.performance.totalTimeMs || 0;
+            metrics.examsPerSecond = report.performance.examsPerSecond || 0;
+        } else {
+            // GA/LP structure
+            metrics.totalTimeMs = report.totalTimeMs || 0;
+            metrics.examsPerSecond = report.examsPerSecond || 0;
+        }
+
+        return metrics;
+    }
+
     static extractMetrics(result) {
         // Handle different result structures
         if (result.results) {
@@ -379,7 +394,77 @@ class AlgorithmComparison {
             return "Both algorithms perform similarly";
         }
     }
-}
+
+    static getRecommendationForThreeWayComparison(scores, performance) {
+        try {
+            // Get available algorithms (only those with both score and performance data)
+            const availableAlgos = Object.keys(scores).filter(algo => 
+                scores[algo] > 0 && performance[algo]?.totalTimeMs > 0
+            );
+
+            // Basic availability checks
+            if (availableAlgos.length === 0) return "No data available for comparison";
+            if (availableAlgos.length === 1) return `Only ${availableAlgos[0]} has data available`;
+
+            // Create a map of available algorithms with their metrics
+            const algoMetrics = {};
+            availableAlgos.forEach(algo => {
+                algoMetrics[algo] = {
+                    score: scores[algo] || 0,
+                    time: performance[algo]?.totalTimeMs || 0
+                };
+            });
+
+            // Find best quality and fastest
+            let bestQuality = { algo: null, score: 0 };
+            let fastest = { algo: null, time: Infinity };
+
+            Object.entries(algoMetrics).forEach(([algo, metrics]) => {
+                if (metrics.score > bestQuality.score) {
+                    bestQuality = { algo, score: metrics.score };
+                }
+                if (metrics.time < fastest.time) {
+                    fastest = { algo, time: metrics.time };
+                }
+            });
+
+            // Generate pairwise comparisons
+            const recommendations = [];
+            for (let i = 0; i < availableAlgos.length; i++) {
+                for (let j = i + 1; j < availableAlgos.length; j++) {
+                    const algo1 = availableAlgos[i];
+                    const algo2 = availableAlgos[j];
+                    
+                    const scoreDiff = algoMetrics[algo2].score - algoMetrics[algo1].score;
+                    const timeDiff = algoMetrics[algo1].time - algoMetrics[algo2].time;
+                    
+                    // Only add significant differences
+                    if (Math.abs(scoreDiff) > 5) {
+                        recommendations.push(`${scoreDiff > 0 ? algo2 : algo1} shows better quality than ${scoreDiff > 0 ? algo1 : algo2}`);
+                    }
+                    if (Math.abs(timeDiff) > algoMetrics[algo1].time * 0.2) {
+                        recommendations.push(`${timeDiff > 0 ? algo2 : algo1} is significantly faster than ${timeDiff > 0 ? algo1 : algo2}`);
+                    }
+                }
+            }
+
+            // Return recommendations
+            if (recommendations.length > 0) {
+                return recommendations.join(". ") + ".";
+            }
+
+            // Default recommendation
+            if (bestQuality.algo === fastest.algo) {
+                return `${bestQuality.algo} shows the best overall performance`;
+            } else {
+                return `${bestQuality.algo} shows best quality, while ${fastest.algo} is fastest`;
+            }
+        } catch (error) {
+            console.error('Error generating recommendation:', error);
+            return "Unable to generate recommendation due to insufficient data";
+        }
+    }
+    }
 
 // If run directly
 if (require.main === module) {

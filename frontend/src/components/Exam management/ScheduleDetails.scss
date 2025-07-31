@@ -545,6 +545,67 @@ tr.exam-row {
     }
 }
 
+.check-roles-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+    &:hover {
+        background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+.check-timeslots-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+    &:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    &:disabled {
+        background: #a0aec0;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
 .overlaps-section {
     margin: 1rem;
     background: white;
@@ -656,6 +717,169 @@ tr.exam-row {
     }
 }
 
+.timeslot-violations-section {
+    margin: 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    animation: slideIn 0.3s ease-out;
+
+    .timeslot-violations-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+
+        h3 {
+            margin: 0;
+            color: #2f855a;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .close-timeslot-violations {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #2f855a;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+
+            &:hover {
+                background-color: rgba(47, 133, 90, 0.1);
+                transform: scale(1.1);
+            }
+        }
+    }
+
+    .no-timeslot-violations {
+        padding: 2rem;
+        text-align: center;
+        color: #38a169;
+        font-size: 1.125rem;
+        font-weight: 500;
+        background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+    }
+
+    .timeslot-violations-list {
+        padding: 1.5rem;
+
+        .timeslot-violations-summary {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+            border-radius: 6px;
+            color: #2f855a;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .timeslot-violation-item {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #9ae6b4;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+
+            .violation-header {
+                font-size: 1.125rem;
+                font-weight: 600;
+                color: #2f855a;
+                margin-bottom: 1rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid #9ae6b4;
+            }
+
+            .violation-details {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+
+                .exam-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+
+                    .exam-name {
+                        font-weight: 600;
+                        color: #2d3748;
+                        font-size: 1rem;
+                    }
+
+                    .course-name {
+                        color: #718096;
+                        font-size: 0.875rem;
+                    }
+                }
+
+                .time-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                    color: #718096;
+                    font-size: 0.875rem;
+
+                    .exam-date {
+                        font-weight: 500;
+                    }
+
+                    .exam-time {
+                        background: #4299e1;
+                        color: white;
+                        padding: 0.25rem 0.5rem;
+                        border-radius: 4px;
+                        font-weight: 500;
+                    }
+
+                    .exam-day {
+                        font-style: italic;
+                    }
+                }
+
+                .violation-reason {
+                    color: #e53e3e;
+                    font-weight: 500;
+                    margin-top: 0.5rem;
+                }
+
+                .available-slots {
+                    margin-top: 1rem;
+                    padding: 1rem;
+                    background: #ebf8ff;
+                    border: 1px solid #90cdf4;
+                    border-radius: 6px;
+
+                    strong {
+                        color: #2b6cb0;
+                        display: block;
+                        margin-bottom: 0.5rem;
+                    }
+
+                    ul {
+                        margin: 0;
+                        padding-left: 1.5rem;
+                        color: #2b6cb0;
+
+                        li {
+                            margin-bottom: 0.25rem;
+                            font-size: 0.875rem;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Update details-header to accommodate the new button
 .details-header {
     display: flex;
@@ -667,5 +891,136 @@ tr.exam-row {
     .schedule-info {
         flex: 1;
         min-width: 0;
+    }
+}
+
+// Role check styles
+.check-roles-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    margin-left: 0.5rem;
+
+    &:hover {
+        background: linear-gradient(135deg, #3182ce 0%, #2c5aa0 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.15);
+    }
+
+    svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+.role-violations-section {
+    margin: 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    animation: slideIn 0.3s ease-out;
+
+    .role-violations-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #bee3f8 0%, #90cdf4 100%);
+
+        h3 {
+            margin: 0;
+            color: #2b6cb0;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .close-role-violations {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #2b6cb0;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+
+            &:hover {
+                background-color: rgba(43, 108, 176, 0.1);
+                transform: scale(1.1);
+            }
+        }
+    }
+
+    .no-role-violations {
+        padding: 2rem;
+        text-align: center;
+        color: #38a169;
+        font-size: 1.125rem;
+        font-weight: 500;
+        background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+    }
+
+    .role-violations-list {
+        padding: 1.5rem;
+
+        .role-violations-summary {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #bee3f8 0%, #90cdf4 100%);
+            border-radius: 6px;
+            color: #2b6cb0;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        .role-violation-item {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #bee3f8;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+
+            .violation-details {
+                .violation-exam {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.5rem;
+
+                    .exam-name {
+                        font-weight: 600;
+                        color: #2d3748;
+                        font-size: 1rem;
+                    }
+
+                    .exam-time {
+                        color: #718096;
+                        font-size: 0.875rem;
+                    }
+                }
+
+                .violation-info {
+                    color: #4a5568;
+                    font-size: 0.875rem;
+
+                    .violation-type {
+                        color: #e53e3e;
+                        font-weight: 500;
+                    }
+                }
+            }
+        }
     }
 }

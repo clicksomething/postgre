@@ -1,12 +1,18 @@
-const { client: pool } = require('../../database/db');
+const { client } = require('../../database/db');
 const fs = require('fs').promises;
 const path = require('path');
 const AssignmentQualityMetrics = require('../utils/assignmentQualityMetrics');
+const { 
+  parseTimeToMinutes, 
+  getDayName, 
+  examFitsInTimeslot,
+  examsOverlap 
+} = require('../utils/dateTimeUtils');
 
 const AssignmentService = {
     // Get exam details
     getExamDetails: async (examId) => {
-        const result = await pool.query(
+        const result = await client.query(
             'SELECT * FROM ExamSchedule WHERE ExamID = $1',
             [examId]
         );
@@ -15,7 +21,7 @@ const AssignmentService = {
 
     // Get observer workload
     getObserverWorkload: async (observerId, examDate) => {
-        const result = await pool.query(`
+        const result = await client.query(`
             SELECT COUNT(*) as workload 
             FROM ExamAssignment 
             WHERE ObserverID = $1 
@@ -59,7 +65,7 @@ const AssignmentService = {
                 ORDER BY o.Title DESC NULLS LAST, o.Name
             `;
 
-            const result = await pool.query(query, [
+            const result = await client.query(query, [
                 exam.ExamDate,
                 examStartTime,
                 examEndTime
@@ -113,7 +119,7 @@ const AssignmentService = {
                     AND (ec.conflict_count IS NULL OR ec.conflict_count = 0)
                 `;
 
-                const timeSlotResult = await pool.query(timeSlotQuery, [
+                const timeSlotResult = await client.query(timeSlotQuery, [
                     exam.ExamDate,
                     examStartTime,
                     examEndTime,
@@ -162,7 +168,7 @@ const AssignmentService = {
             trackPhase('initialization');
 
             // Start transaction
-            await pool.query('BEGIN');
+            await client.query('BEGIN');
             performanceMetrics.databaseQueries++;
 
             // Get all unassigned exams if examId is an array, otherwise just the single exam
@@ -171,14 +177,14 @@ const AssignmentService = {
             
             // 1. Clear existing assignments for all exams in one query
             trackPhase('clearAssignments');
-            await pool.query(`
+            await client.query(`
                 DELETE FROM ExamAssignment 
                 WHERE ExamID = ANY($1)`,
                 [examIds]
             );
             performanceMetrics.databaseQueries++;
 
-            await pool.query(`
+            await client.query(`
                 UPDATE ExamSchedule 
                 SET ExamHead = NULL, ExamSecretary = NULL, Status = 'unassigned'
                 WHERE ExamID = ANY($1)`,
@@ -189,7 +195,7 @@ const AssignmentService = {
 
             // 2. Get all exam details in one query
             trackPhase('fetchExams');
-            const examsResult = await pool.query(`
+            const examsResult = await client.query(`
                 SELECT 
                     es.*,
                     c.CourseName,
@@ -208,7 +214,7 @@ const AssignmentService = {
 
             // 3. Get ALL observers with their availability and current workload in ONE query
             trackPhase('fetchObservers');
-            const observersResult = await pool.query(`
+            const observersResult = await client.query(`
                 WITH observer_workload AS (
                     SELECT 
                         ObserverID,
@@ -252,13 +258,13 @@ const AssignmentService = {
             trackPhase('fetchConflicts');
             const examDates = [...new Set(exams.map(e => e.examdate))];
             // Get the schedule ID from the first exam
-            const scheduleResult = await pool.query(
+            const scheduleResult = await client.query(
                 'SELECT ScheduleID FROM ExamSchedule WHERE ExamID = $1',
                 [examIds[0]]
             );
             const scheduleId = scheduleResult.rows[0]?.scheduleid;
             
-            const conflictsResult = await pool.query(`
+            const conflictsResult = await client.query(`
                 SELECT 
                     ea.ObserverID,
                     es.ExamDate,
@@ -347,8 +353,13 @@ const AssignmentService = {
                             
                             if (!slotStart || !slotEnd) return false;
                             
-                            // Simple time comparison (assuming HH:MM format)
-                            return slotStart <= exam.starttime && slotEnd >= exam.endtime;
+                            // Use bulletproof time comparison
+                            const slotStartMinutes = parseTimeToMinutes(slotStart);
+                            const slotEndMinutes = parseTimeToMinutes(slotEnd);
+                            const examStartMinutes = parseTimeToMinutes(exam.starttime);
+                            const examEndMinutes = parseTimeToMinutes(exam.endtime);
+                            
+                            return slotStartMinutes <= examStartMinutes && slotEndMinutes >= examEndMinutes;
                         });
                         
                         if (!hasMatchingSlot) return false;
@@ -361,7 +372,13 @@ const AssignmentService = {
                             const conflictStart = conflict.startTime || conflict.starttime;
                             const conflictEnd = conflict.endTime || conflict.endtime;
                             
-                            return (exam.starttime < conflictEnd && exam.endtime > conflictStart);
+                            // Use bulletproof time comparison
+                            const conflictStartMinutes = parseTimeToMinutes(conflictStart);
+                            const conflictEndMinutes = parseTimeToMinutes(conflictEnd);
+                            const examStartMinutes = parseTimeToMinutes(exam.starttime);
+                            const examEndMinutes = parseTimeToMinutes(exam.endtime);
+                            
+                            return (examStartMinutes < conflictEndMinutes && examEndMinutes > conflictStartMinutes);
                         });
                         
                         return !hasConflict;
@@ -457,7 +474,7 @@ const AssignmentService = {
                     INSERT INTO ExamAssignment (ExamID, ScheduleID, ObserverID, Role, Status)
                     VALUES ${assignmentInserts.map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`).join(', ')}
                 `;
-                await pool.query(insertQuery, assignmentInserts.flat());
+                await client.query(insertQuery, assignmentInserts.flat());
                 performanceMetrics.databaseQueries++;
             }
             trackPhase('insertAssignments');
@@ -477,13 +494,13 @@ const AssignmentService = {
                         END
                     WHERE ExamID IN (${examUpdates.map(u => u.examId).join(', ')})
                 `;
-                await pool.query(updateQuery);
+                await client.query(updateQuery);
                 performanceMetrics.databaseQueries++;
             }
             trackPhase('updateExams');
 
             trackPhase('commit');
-            await pool.query('COMMIT');
+            await client.query('COMMIT');
             performanceMetrics.databaseQueries++;
             trackPhase('commit');
 
@@ -514,23 +531,9 @@ const AssignmentService = {
             // Save performance report to file
             const savePerformanceReport = async () => {
                 try {
-                    const reportsDir = path.join(__dirname, '../../performance-reports');
-                    console.log('[PERFORMANCE] Saving report to:', reportsDir);
+                    const MetricsService = require('./metricsService');
                     
-                    // Create directory if it doesn't exist
-                    try {
-                        await fs.mkdir(reportsDir, { recursive: true });
-                        console.log('[PERFORMANCE] Directory created/exists');
-                    } catch (err) {
-                        console.log('[PERFORMANCE] Directory error:', err.message);
-                    }
-
-                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                    const filename = `assignment-performance-${timestamp}.json`;
-                    const filepath = path.join(reportsDir, filename);
-                    console.log('[PERFORMANCE] Writing file:', filepath);
-
-                    // Prepare assignments for quality metrics
+                    // Prepare assignments for metrics service
                     const assignments = exams.map(exam => {
                         const successfulAssignment = results.successful.find(s => s.examId === exam.examid);
                         if (successfulAssignment) {
@@ -551,45 +554,28 @@ const AssignmentService = {
                         }
                     });
                     
-                    // Calculate quality metrics
-                    const qualityMetrics = AssignmentQualityMetrics.calculateMetrics(
-                        assignments,
+                    // Format data for metrics service
+                    const data = {
                         exams,
-                        allObservers
-                    );
-                    
-                    const report = {
-                        timestamp: new Date().toISOString(),
-                        algorithm: 'random',
-                        operationType: Array.isArray(examId) ? 'bulk' : 'single',
-                        examCount: performanceMetrics.examCount,
-                        observerCount: performanceMetrics.observerCount,
-                        successfulAssignments: performanceMetrics.assignmentCount,
-                        failedAssignments: performanceMetrics.failedCount,
-                        performance: performanceStats,
-                        qualityMetrics: qualityMetrics,
-                        detailedResults: results
+                        observers: allObservers
                     };
-
-                    await fs.writeFile(filepath, JSON.stringify(report, null, 2));
-                    console.log('[PERFORMANCE] Report file written successfully');
                     
-                    // Also save a summary to a running log file
-                    const summaryFile = path.join(reportsDir, 'performance-summary.jsonl');
-                    const summaryLine = JSON.stringify({
-                        timestamp: report.timestamp,
-                        algorithm: 'random',
-                        operationType: report.operationType,
-                        examCount: report.examCount,
-                        totalTimeMs: performanceStats.totalTimeMs,
-                        examsPerSecond: performanceStats.examsPerSecond,
-                        successRate: ((performanceMetrics.assignmentCount / performanceMetrics.examCount) * 100).toFixed(1),
-                        qualityScore: qualityMetrics.overallScore.percentage.toFixed(1),
-                        qualityGrade: qualityMetrics.overallScore.grade
-                    }) + '\n';
+                    // Format results for metrics service
+                    const metricsResults = {
+                        successful: assignments.filter(a => a.headId && a.secretaryId),
+                        failed: assignments.filter(a => !a.headId || !a.secretaryId)
+                    };
                     
-                    await fs.appendFile(summaryFile, summaryLine);
-                    console.log('[PERFORMANCE] Summary line appended');
+                    // Save metrics using central service
+                    await MetricsService.saveMetrics('random', metricsResults, data, {
+                        executionTime: performanceMetrics.totalDuration,
+                        operationType: Array.isArray(examId) ? 'bulk' : 'single',
+                        databaseQueries: performanceMetrics.databaseQueries,
+                        memoryUsedMB: (performanceMetrics.memoryDelta.heapUsed / 1024 / 1024).toFixed(2),
+                        phases: performanceMetrics.phases
+                    });
+                    
+                    console.log('[PERFORMANCE] Random algorithm metrics saved successfully');
                 } catch (error) {
                     console.error('[PERFORMANCE] Failed to save performance report:', error);
                 }
@@ -625,7 +611,7 @@ const AssignmentService = {
             }
 
         } catch (error) {
-            await pool.query('ROLLBACK');
+            await client.query('ROLLBACK');
             console.error('[ASSIGNMENT SERVICE] Error in assignObserversToExam:', error);
             throw error;
         }

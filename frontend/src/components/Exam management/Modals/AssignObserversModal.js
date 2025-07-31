@@ -60,7 +60,7 @@ const AssignObserversModal = ({
                 <h2>Assign Observers</h2>
                 <div className="exam-details">
                     <p><strong>Exam:</strong> {examId}</p>
-                    <p><strong>Date:</strong> {new Date(scheduleId).toLocaleDateString()}</p>
+                    <p><strong>Date:</strong> {scheduleId || 'N/A'}</p>
                 </div>
 
                 {loading ? (

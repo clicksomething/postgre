@@ -186,6 +186,38 @@
       position: relative;
       z-index: 1;
     }
+
+    .card-grade {
+      font-size: var(--font-size-xs);
+      color: var(--text-secondary);
+      font-weight: var(--font-weight-medium);
+      margin-top: var(--space-2);
+      position: relative;
+      z-index: 1;
+    }
+
+    &.winner {
+      background: linear-gradient(135deg, var(--success-50), var(--success-100));
+      border-color: var(--success-300);
+
+      .winner-value {
+        background: linear-gradient(135deg, var(--success-600), var(--success-700));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .card-recommendation {
+        margin-top: var(--space-3);
+        padding: var(--space-3);
+        background: var(--success-50);
+        border-radius: var(--radius-lg);
+        font-size: var(--font-size-sm);
+        color: var(--success-700);
+        font-weight: var(--font-weight-medium);
+        border: 1px solid var(--success-200);
+      }
+    }
   }
 }
 
@@ -287,6 +319,133 @@
         .neutral {
           color: var(--warning-600);
           font-weight: var(--font-weight-semibold);
+        }
+
+        .winner-badge {
+          background: linear-gradient(135deg, var(--success-500), var(--success-600));
+          color: white;
+          padding: var(--space-1) var(--space-3);
+          border-radius: var(--radius-full);
+          font-weight: var(--font-weight-semibold);
+          font-size: var(--font-size-sm);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+
+          &.small {
+            font-size: var(--font-size-xs);
+            padding: var(--space-1) var(--space-2);
+          }
+        }
+
+        .rank-badge {
+          background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+          color: white;
+          padding: var(--space-1) var(--space-3);
+          border-radius: var(--radius-full);
+          font-weight: var(--font-weight-semibold);
+          font-size: var(--font-size-sm);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+      }
+    }
+  }
+
+  /* Improvements Section */
+  .improvements-section {
+    margin-top: var(--space-6);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-light);
+
+    h3 {
+      margin: 0 0 var(--space-4) 0;
+      color: var(--text-primary);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .improvements-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-4);
+
+      .improvement-card {
+        background: var(--bg-secondary);
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-light);
+        text-align: center;
+        transition: all var(--transition-base);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+          border-color: var(--primary-300);
+        }
+
+        h4 {
+          margin: 0 0 var(--space-2) 0;
+          color: var(--text-secondary);
+          font-size: var(--font-size-sm);
+          font-weight: var(--font-weight-medium);
+        }
+
+        span {
+          font-size: var(--font-size-lg);
+          font-weight: var(--font-weight-bold);
+        }
+      }
+    }
+  }
+
+  /* Speed Comparison Section */
+  .speed-comparison-section {
+    margin-top: var(--space-6);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-light);
+
+    h3 {
+      margin: 0 0 var(--space-4) 0;
+      color: var(--text-primary);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .speed-comparisons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--space-4);
+
+      .speed-card {
+        background: var(--bg-secondary);
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-light);
+        text-align: center;
+        transition: all var(--transition-base);
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+          border-color: var(--primary-300);
+        }
+
+        h4 {
+          margin: 0 0 var(--space-2) 0;
+          color: var(--text-secondary);
+          font-size: var(--font-size-sm);
+          font-weight: var(--font-weight-medium);
+        }
+
+        .speed-badge {
+          background: linear-gradient(135deg, var(--info-500), var(--info-600));
+          color: white;
+          padding: var(--space-2) var(--space-4);
+          border-radius: var(--radius-full);
+          font-weight: var(--font-weight-semibold);
+          font-size: var(--font-size-sm);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
       }
     }

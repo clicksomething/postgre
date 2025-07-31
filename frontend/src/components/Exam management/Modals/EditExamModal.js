@@ -9,9 +9,9 @@ const EditExamModal = ({ exam, onClose, onUpdate }) => {
         courseName: exam.course.name || '',
         roomNum: exam.room.number || '',
         roomCapacity: exam.room.capacity || '',
-        examDate: exam.examDate ? new Date(exam.examDate).toISOString().split('T')[0] : '',
-        startTime: exam.startTime ? exam.startTime.split(':').slice(0, 2).join(':') : '',
-        endTime: exam.endTime ? exam.endTime.split(':').slice(0, 2).join(':') : '',
+        examDate: exam.examDate || '',
+        startTime: exam.startTime || '',
+        endTime: exam.endTime || '',
         numOfStudents: exam.numOfStudents || ''
     });
 
@@ -23,10 +23,10 @@ const EditExamModal = ({ exam, onClose, onUpdate }) => {
         const { name, value } = e.target;
         
         if (name === 'startTime' || name === 'endTime') {
-            const timeValue = value.split(':').slice(0, 2).join(':');
+            // Simple time input - backend should validate format
             setFormData(prev => ({
                 ...prev,
-                [name]: timeValue
+                [name]: value
             }));
         } else {
             setFormData(prev => ({
@@ -47,17 +47,14 @@ const EditExamModal = ({ exam, onClose, onUpdate }) => {
             return false;
         }
 
-        // Validate time format (HH:mm)
-        const timePattern = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-        if (!timePattern.test(formData.startTime) || !timePattern.test(formData.endTime)) {
-            setError('Invalid time format. Use HH:mm format');
+        // Basic validation - backend should handle complex validation
+        if (!formData.startTime || !formData.endTime) {
+            setError('Start time and end time are required');
             return false;
         }
 
-        // Validate that end time is after start time
-        const [startHour, startMin] = formData.startTime.split(':').map(Number);
-        const [endHour, endMin] = formData.endTime.split(':').map(Number);
-        if (startHour > endHour || (startHour === endHour && startMin >= endMin)) {
+        // Simple time comparison - backend should handle complex validation
+        if (formData.startTime >= formData.endTime) {
             setError('End time must be after start time');
             return false;
         }

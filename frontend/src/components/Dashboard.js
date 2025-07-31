@@ -12,10 +12,14 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+    if (!isInitialized) {
+      fetchDashboardStats();
+      setIsInitialized(true);
+    }
+  }, [isInitialized]);
 
   const fetchDashboardStats = async () => {
     try {

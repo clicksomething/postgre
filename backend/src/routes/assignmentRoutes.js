@@ -22,9 +22,8 @@ router.get('/performance/stats', assignmentController.getPerformanceStats);
 // Genetic algorithm assignment
 router.post('/schedules/:scheduleId/assign-genetic', assignmentController.assignObserversWithGA);
 
-// Linear programming assignment (lexicographic)
+// Linear programming assignment (now JavaScript implementation)
 router.post('/schedules/:scheduleId/assign-lp', assignmentController.assignObserversWithLP);
-
 
 
 // Run and compare algorithms
@@ -41,13 +40,22 @@ router.post(
 // Algorithm comparison routes
 router.get('/algorithms/compare', async (req, res) => {
     try {
+        console.log('Request Body:', req.body);
+        console.log('Token received:', req.headers.authorization);
+        
         const comparison = await AlgorithmComparison.compareLatestReports();
+        
         if (!comparison) {
+            console.log('No comparison data returned');
             return res.status(404).json({
                 success: false,
-                message: 'No reports found to compare. Please run both algorithms first.'
+                message: 'No algorithm reports found. Please run at least one algorithm first.'
             });
         }
+        
+        // Log the structure of the comparison data
+        console.log('Comparison data structure:', 
+            Object.keys(comparison).map(key => `${key}: ${typeof comparison[key]}`));
         
         res.json({
             success: true,
@@ -55,10 +63,14 @@ router.get('/algorithms/compare', async (req, res) => {
         });
     } catch (error) {
         console.error('Error comparing algorithms:', error);
+        console.error('Stack trace:', error.stack);
+        
+        // Send a more descriptive error message
         res.status(500).json({
             success: false,
             message: 'Error comparing algorithms',
-            error: error.message
+            error: error.message,
+            details: 'An error occurred while comparing algorithm results. This might happen if the metrics data is incomplete or malformed.'
         });
     }
 });

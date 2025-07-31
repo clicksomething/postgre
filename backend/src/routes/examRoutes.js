@@ -19,6 +19,7 @@ router.delete('/schedules/:scheduleId', authenticateToken, examController.delete
 router.get('/all', authenticateToken, examController.getAllExamsWithAssignments);
 router.get('/schedule-assignments', authenticateToken, examController.getScheduleAssignments);
 router.post('/distribute/random/:scheduleId', authenticateToken, examController.randomDistribution);
+router.get('/schedules/:scheduleId/check-timeslots', authenticateToken, examController.checkTimeslotCompliance);
 
 module.exports = router;
 

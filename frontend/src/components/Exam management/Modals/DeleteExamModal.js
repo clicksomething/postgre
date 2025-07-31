@@ -46,7 +46,7 @@ const DeleteExamModal = ({ exam, onClose, onDelete }) => {
                     <div className="exam-details">
                         <p><strong>Course:</strong> {exam.course.name}</p>
                         <p><strong>Exam Name:</strong> {exam.examName}</p>
-                        <p><strong>Date:</strong> {new Date(exam.examDate).toLocaleDateString()}</p>
+                        <p><strong>Date:</strong> {exam.examDate || 'N/A'}</p>
                     </div>
                     {error && <div className="error-message">{error}</div>}
                 </div>

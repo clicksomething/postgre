@@ -6,7 +6,8 @@ import {
     FaChartLine,
     FaCog,
     FaArrowLeft,
-    FaCalculator
+    FaCalculator,
+    FaPython
 } from 'react-icons/fa';
 import './DistributionOptionsModal.scss';
 
@@ -46,27 +47,27 @@ const DistributionOptionsModal = ({ schedule, onClose, onSelectAlgorithm }) => {
         },
         {
             id: 'linear-programming',
-            name: 'Linear Programming (Lexicographic)',
-            description: 'Find optimal solution using mathematical optimization',
+            name: 'Linear Programming',
+            description: 'Find optimal solution using JavaScript implementation',
             icon: <FaCalculator />,
             constraints: [
                 'Guarantees optimal coverage (100% if feasible)',
                 'Maximizes workload balance given coverage',
                 'Maximizes fairness given coverage and workload',
                 'Fast execution (seconds vs minutes)',
-                'Mathematically optimal solution'
+                'Pure JavaScript implementation - no external dependencies'
             ]
         },
         {
             id: 'compare',
             name: 'Compare & Apply Best',
-            description: 'Run both algorithms, compare results, and apply the best one',
+            description: 'Run all three algorithms, compare results, and apply the best one',
             icon: <FaChartLine />,
             constraints: [
-                'Runs both Random and Genetic algorithms',
-                'Compares quality metrics and performance',
-                'Automatically applies the better result',
-                'Shows detailed comparison report'
+                'Runs Random, Genetic, and Linear Programming algorithms',
+                'Compares quality metrics and performance across all three',
+                'Automatically applies the best result',
+                'Shows detailed three-way comparison report'
             ]
         }
     ];

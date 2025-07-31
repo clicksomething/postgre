@@ -8,7 +8,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const crypto = require('crypto');
 const { parseTimeSlot, validateAndFormatTime } = require('../utils/timeSlotParser');
-const { smartTranslate } = require('../utils/translationService');
+// Translation service removed - using simple fallback logic
 
 const fileFilter = (req, file, cb) => {
   // Mimetypes for Excel files (.xlsx, .xls)
@@ -799,26 +799,26 @@ const uploadObservers = async (req, res) => {
             
             const fileSummary = {
                 fileName: file.originalname,
-                observersCreated: 0,
-                timeSlotsCreated: 0,
-                observersSkipped: 0,
-                errors: [],
-                parseErrors: [],
+        observersCreated: 0,
+        timeSlotsCreated: 0,
+        observersSkipped: 0,
+        errors: [],
+        parseErrors: [],
                 status: 'processing'
-            };
+    };
 
-            try {
+    try {
                 const workbook = xlsx.read(file.buffer, { type: 'buffer' });
-                const sheetName = workbook.SheetNames[0];
+        const sheetName = workbook.SheetNames[0];
                 if (!sheetName) {
                     throw new Error("The uploaded Excel file contains no sheets.");
                 }
-                
-                const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        
+        const results = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
                 console.log(`--- FILE ${fileIndex + 1} EXCEL DATA ---`);
-                console.log(JSON.stringify(results, null, 2));
-                console.log("-----------------------");
+        console.log(JSON.stringify(results, null, 2));
+        console.log("-----------------------");
 
                 // Validate input before processing
                 if (results.length === 0) {
@@ -875,7 +875,7 @@ const uploadObservers = async (req, res) => {
             'Research Assistant': 'Research Assistant',
         };
 
-        // Mapping functions with smart translation fallback
+        // Mapping functions with simple fallback logic
         const mapTitle = async (title) => {
             if (!title) return '';
             
@@ -888,11 +888,7 @@ const uploadObservers = async (req, res) => {
             let mappedTitle = titleMappings[title.trim()] || 
                               titleMappings[normalizedTitle];
             
-            // If no mapping found, use smart translation
-            if (!mappedTitle) {
-                mappedTitle = await smartTranslate(title, titleMappings, 'title');
-            }
-            
+            // If no mapping found, return normalized title as fallback
             return mappedTitle || normalizedTitle;
         };
 
@@ -908,11 +904,7 @@ const uploadObservers = async (req, res) => {
             let mappedRank = scientificRankMappings[rank.trim()] || 
                              scientificRankMappings[normalizedRank];
             
-            // If no mapping found, use smart translation
-            if (!mappedRank) {
-                mappedRank = await smartTranslate(rank, scientificRankMappings, 'rank');
-            }
-            
+            // If no mapping found, return normalized rank as fallback
             return mappedRank || normalizedRank;
         };
 
@@ -953,14 +945,14 @@ const uploadObservers = async (req, res) => {
         }
 
                 // Process each row in the file
-                for (const [index, row] of results.entries()) {
-                    const rowNum = index + 2; // Excel rows start at 2
-                    
-                    try {
-                        await client.query('BEGIN');
-                        
+        for (const [index, row] of results.entries()) {
+            const rowNum = index + 2; // Excel rows start at 2
+            
+            try {
+                await client.query('BEGIN');
+                
                         console.log(`--- PROCESSING ROW ${rowNum} IN FILE ${fileIndex + 1} ---`);
-                        console.log('Raw Row Data:', JSON.stringify(row, null, 2));
+                console.log('Raw Row Data:', JSON.stringify(row, null, 2));
 
                 // Detailed mapping with extensive logging
                 const mappedRow = {};
@@ -984,7 +976,7 @@ const uploadObservers = async (req, res) => {
                 const mappedTitle = await mapTitle(mappedRow.title || '');
                 const mappedScientificRank = await mapScientificRank(mappedRow.scientificRank || '');
 
-                // Availability mapping with smart translation fallback
+                // Availability mapping with simple fallback logic
                 const availabilityMapping = {
                     'جزئي': 'part-time',
                     'كامل': 'full-time',
@@ -993,10 +985,7 @@ const uploadObservers = async (req, res) => {
                     'full-time': 'full-time'
                 };
                 
-                let mappedAvailability = availabilityMapping[mappedRow.availability?.trim()];
-                if (!mappedAvailability) {
-                    mappedAvailability = await smartTranslate(mappedRow.availability, availabilityMapping, 'availability') || 'part-time';
-                }
+                let mappedAvailability = availabilityMapping[mappedRow.availability?.trim()] || 'part-time';
 
                 console.log('Mapped Details:');
                 console.log('Title:', mappedTitle);
@@ -1164,7 +1153,7 @@ const uploadObservers = async (req, res) => {
                 // Continue processing other rows instead of stopping
                 console.log(`Continuing with next row after error in row ${rowNum} of file ${fileIndex + 1}`);
             }
-                }
+        }
 
                 // Update file summary status
                 const hasFileErrors = fileSummary.errors.length > 0 || fileSummary.parseErrors.length > 0;

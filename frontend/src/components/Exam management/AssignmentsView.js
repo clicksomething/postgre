@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FaTimes, FaCheck, FaExclamationTriangle, FaClipboardList } from 'react-icons/fa';
 import axios from 'axios';
 import DistributionOptionsModal from './Modals/DistributionOptionsModal';
@@ -15,12 +15,24 @@ const AssignmentsView = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [schedulesPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-    
-
+    const [pollingInterval, setPollingInterval] = useState(null);
+    const hasInitialized = useRef(false);
 
     useEffect(() => {
-        fetchScheduleAssignments();
-    }, []);
+        if (!hasInitialized.current) {
+            fetchScheduleAssignments();
+            hasInitialized.current = true;
+        }
+    }, []); // Only run once on mount
+
+    // Separate useEffect for cleanup
+    useEffect(() => {
+        return () => {
+            if (pollingInterval) {
+                clearTimeout(pollingInterval);
+            }
+        };
+    }, [pollingInterval]);
 
 
 
@@ -121,92 +133,116 @@ const AssignmentsView = () => {
                 // Show initial message that algorithm has started
                 alert('Genetic algorithm has started running in the background. This may take a few minutes. You will be notified when it completes.');
                 
-                // Poll for completion status
-                const pollForCompletion = async () => {
-                    try {
-                        // Wait a bit before first check
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        
-                        // Check if assignments have been updated
-                        const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
-                            headers: { 
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                        
-                        // Find the current schedule
-                        const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
-                        
-                        if (currentSchedule && currentSchedule.assignedExams > 0) {
-                            // Algorithm has completed and applied results
-                alert(`Genetic Algorithm Distribution Complete!\n` +
-                                  `Total Exams: ${currentSchedule.totalExams}\n` +
-                                  `Successful Assignments: ${currentSchedule.assignedExams}\n` +
-                                  `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
-                                  `Status: ${currentSchedule.assignmentStatus}`
-                            );
-                            
-                            // Refresh the data
-                            fetchScheduleAssignments();
-                            return;
-                        }
-                        
-                        // If not complete, poll again in 3 seconds
-                        setTimeout(pollForCompletion, 3000);
-                    } catch (error) {
-                        console.error('Error polling for completion:', error);
-                        alert('Error checking algorithm completion status. Please refresh the page to see results.');
-                    }
-                };
+                // DISABLED: Poll for completion status
+                // const pollForCompletion = async () => {
+                //     try {
+                //         pollCount++;
+                //         
+                //         // Stop polling if we've exceeded the maximum attempts
+                //         if (pollCount > maxPolls) {
+                //             alert('Genetic algorithm is taking longer than expected. Please check the results manually.');
+                //             return;
+                //         }
+                //         
+                //         // Wait a bit before first check
+                //         await new Promise(resolve => setTimeout(resolve, 2000));
+                //         
+                //         // Check if assignments have been updated
+                //         const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
+                //             headers: { 
+                //                 'Authorization': `Bearer ${token}`,
+                //                 'Content-Type': 'application/json'
+                //             }
+                //         });
+                //         
+                //         // Find the current schedule
+                //         const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
+                //         
+                //         if (currentSchedule && currentSchedule.assignedExams > 0) {
+                //             // Algorithm has completed and applied results
+                //             alert(`Genetic Algorithm Distribution Complete!\n` +
+                //                   `Total Exams: ${currentSchedule.totalExams}\n` +
+                //                   `Successful Assignments: ${currentSchedule.assignedExams}\n` +
+                //                   `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
+                //                   `Status: ${currentSchedule.assignmentStatus}`
+                //             );
+                //             
+                //             // Refresh the data
+                //             fetchScheduleAssignments();
+                //             return;
+                //         }
+                //         
+                //         // If not complete, poll again in 3 seconds
+                //         const timeoutId = setTimeout(pollForCompletion, 3000);
+                //         setPollingInterval(timeoutId);
+                //     } catch (error) {
+                //         console.error('Error polling for completion:', error);
+                //         alert('Error checking algorithm completion status. Please refresh the page to see results.');
+                //     }
+                // };
+                // 
+                // // Start polling
+                // pollForCompletion();
                 
-                // Start polling
-                pollForCompletion();
+                // Simple completion message instead of polling
+                alert('Genetic algorithm has started. Please refresh the page in a few minutes to see the results.');
             } else if (algorithmId === 'linear-programming') {
                 // Show initial message that algorithm has started
                 alert('Linear programming algorithm has started running in the background. This should complete quickly. You will be notified when it completes.');
                 
-                // Poll for completion status
-                const pollForCompletion = async () => {
-                    try {
-                        // Wait a bit before first check
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                        
-                        // Check if assignments have been updated
-                        const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
-                            headers: { 
-                                'Authorization': `Bearer ${token}`,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                        
-                        // Find the current schedule
-                        const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
-                        
-                        if (currentSchedule && currentSchedule.assignedExams > 0) {
-                            // Algorithm has completed and applied results
-                            alert(`Linear Programming Algorithm Distribution Complete!\n` +
-                                  `Total Exams: ${currentSchedule.totalExams}\n` +
-                                  `Successful Assignments: ${currentSchedule.assignedExams}\n` +
-                                  `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
-                                  `Status: ${currentSchedule.assignmentStatus}`
-                            );
-                            
-                            // Refresh the data
-                            fetchScheduleAssignments();
-                            return;
-                        }
-                        
-                        // If not complete, poll again in 1 second (LP should be fast)
-                        setTimeout(pollForCompletion, 1000);
-                    } catch (error) {
-                        console.error('Error polling for completion:', error);
-                        alert('Error checking algorithm completion status. Please refresh the page to see results.');
-                    }
-                };
+                // DISABLED: Poll for completion status
+                // const pollForCompletion = async () => {
+                //     try {
+                //         pollCount++;
+                //         
+                //         // Stop polling if we've exceeded the maximum attempts
+                //         if (pollCount > maxPolls) {
+                //             alert('Linear programming algorithm is taking longer than expected. Please check the results manually.');
+                //             return;
+                //         }
+                //         
+                //         // Wait a bit before first check
+                //         await new Promise(resolve => setTimeout(resolve, 1000));
+                //         
+                //         // Check if assignments have been updated
+                //         const updatedSchedules = await axios.get('http://localhost:3000/api/exams/schedule-assignments', {
+                //             headers: { 
+                //                 'Authorization': `Bearer ${token}`,
+                //                 'Content-Type': 'application/json'
+                //             }
+                //         });
+                //         
+                //         // Find the current schedule
+                //         const currentSchedule = updatedSchedules.data.find(s => s.scheduleId === selectedSchedule.scheduleId);
+                //         
+                //         if (currentSchedule && currentSchedule.assignedExams > 0) {
+                //             // Algorithm has completed and applied results
+                //             alert(`Linear Programming Algorithm Distribution Complete!\n` +
+                //                   `Total Exams: ${currentSchedule.totalExams}\n` +
+                //                   `Successful Assignments: ${currentSchedule.assignedExams}\n` +
+                //                   `Failed Assignments: ${currentSchedule.totalExams - currentSchedule.assignedExams}\n` +
+                //                   `Status: ${currentSchedule.assignmentStatus}`
+                //             );
+                //             
+                //             // Refresh the data
+                //             fetchScheduleAssignments();
+                //             return;
+                //         }
+                //         
+                //         // If not complete, poll again in 1 second (LP should be fast)
+                //         const timeoutId = setTimeout(pollForCompletion, 1000);
+                //         setPollingInterval(timeoutId);
+                //     } catch (error) {
+                //         console.error('Error polling for completion:', error);
+                //         alert('Error checking algorithm completion status. Please refresh the page to see results.');
+                //     }
+                // };
+                // 
+                // // Start polling
+                // pollForCompletion();
                 
-                // Start polling
-                pollForCompletion();
+                // Simple completion message instead of polling
+                alert('Linear programming algorithm has started. Please refresh the page in a few seconds to see the results.');
             } else if (algorithmId === 'compare') {
                 const { comparison, appliedAlgorithm, message } = response.data;
                 
@@ -261,8 +297,9 @@ const AssignmentsView = () => {
                 let bValue = b[sortConfig.key];
 
                 if (sortConfig.key === 'uploadDate') {
-                    aValue = new Date(a.uploadDate);
-                    bValue = new Date(b.uploadDate);
+                    // Simple string comparison - backend should provide consistent date format
+                    aValue = a.uploadDate || '';
+                    bValue = b.uploadDate || '';
                 }
 
                 if (aValue < bValue) {
@@ -322,7 +359,7 @@ const AssignmentsView = () => {
             key: 'uploadDate',
             label: 'Upload Date',
             sortable: true,
-            render: (schedule) => new Date(schedule.uploadDate).toLocaleDateString()
+            render: (schedule) => schedule.uploadDate || 'N/A'
         },
         {
             key: 'totalExams',

@@ -86,7 +86,17 @@ const AlgorithmComparison = () => {
         return (
             <div className="comparison-page-wrapper">
                 <div className="info-message">
-                    No comparison data available. Please run both algorithms first.
+                    No comparison data available. Please run all three algorithms first.
+                    <br /><br />
+                    <strong>To generate comparison data:</strong>
+                    <br />
+                    1. Run the Random algorithm (Distribute button)
+                    <br />
+                    2. Run the Genetic algorithm (Genetic Algorithm button)
+                    <br />
+                    3. Run the Linear Programming algorithm (Linear Programming button)
+                    <br />
+                    4. Use "Compare & Apply Best" to run all three and compare results
                 </div>
             </div>
         );

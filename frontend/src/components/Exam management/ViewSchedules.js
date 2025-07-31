@@ -21,6 +21,7 @@ const ViewSchedules = ({ onScheduleSelect }) => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [scheduleToDelete, setScheduleToDelete] = useState(null);
     
+    
     useEffect(() => {
         fetchSchedules();
     }, []);
@@ -148,8 +149,9 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                         bValue = b.scheduleInfo?.status || b.status || '';
                         break;
                     case 'uploadDate':
-                        aValue = new Date(a.scheduleInfo?.uploadedAt || a.uploadedat);
-                        bValue = new Date(b.scheduleInfo?.uploadedAt || b.uploadedat);
+                        // Simple string comparison - backend should provide consistent date format
+                        aValue = a.scheduleInfo?.uploadedAt || a.uploadedat || '';
+                        bValue = b.scheduleInfo?.uploadedAt || b.uploadedat || '';
                         break;
                     default:
                         aValue = a[sortConfig.key] || '';
@@ -208,7 +210,7 @@ const ViewSchedules = ({ onScheduleSelect }) => {
             key: 'uploadDate',
             label: 'Upload Date',
             sortable: true,
-            render: (schedule) => new Date(schedule.scheduleInfo?.uploadedAt || schedule.uploadedat).toLocaleDateString()
+            render: (schedule) => schedule.scheduleInfo?.uploadedAt || schedule.uploadedat || 'N/A'
         },
         {
             key: 'actions',
@@ -230,6 +232,7 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                     >
                         <FaEdit /> Edit
                     </button>
+
                     <button 
                         className="delete-button"
                         style={{ display: 'inline-block' }}
@@ -281,6 +284,8 @@ const ViewSchedules = ({ onScheduleSelect }) => {
                     onCancel={cancelDelete}
                 />
             )}
+
+
         </div>
     );
 };
